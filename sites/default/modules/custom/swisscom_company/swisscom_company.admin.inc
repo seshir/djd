@@ -7,7 +7,7 @@
 
 function swisscom_company_admin_list() {
   $r = entity_load('swisscom_company');
-  dpm($r, 'All companies');
+  //dpm($r, 'All companies');
 }
 
 

@@ -144,7 +144,7 @@ function api_management_change_api_name_form_submit($form, $form_state) {
 
   // Update API Console
   foreach ($result['taxonomy_term'] as $tid => $info) {
-    //dpm($tid . '---'. $form_state['input']['api_name'] . '---'. VID_API_NAME . ' -- '. $form_state['input']['api_ms_name']);
+    // dpm($tid . '---'. $form_state['input']['api_name'] . '---'. VID_API_NAME . ' -- '. $form_state['input']['api_ms_name']);
 
     // Update API Console
     $query = db_select('field_data_field_api_name_console', 'a');
@@ -919,7 +919,7 @@ function api_management_private_api_form() {
 
   $form['#submit'][0] = 'api_management_private_api_form_submit';
 
-  //dpm($form);
+  // dpm($form);
 
   return $form;
 }

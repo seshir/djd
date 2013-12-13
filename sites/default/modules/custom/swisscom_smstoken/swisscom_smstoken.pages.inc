@@ -235,7 +235,7 @@ function swisscom_smstoken_verify_form_submit($form, &$form_state) {
 //    $mobile_number = $form_state['values']['step1']['field_mobile_number'][LANGUAGE_NONE][0]['number'];
 //    if (isset($mobile_number)) {
 //      swisscom_smstoken_send_sms_validation_code($mobile_country_code, $mobile_number);
-////      dpm('sending token...');
+    // dpm('sending token...');
 //    }
 //  }
 //
