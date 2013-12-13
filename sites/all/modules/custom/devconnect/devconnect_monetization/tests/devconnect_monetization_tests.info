@@ -1,0 +1,12 @@
+name = Tests for DevConnect Monetization
+description = Tests the objects in the Apigee Commerce API hierarchy
+core = 7.x
+package = DevConnect
+php = 5.3
+version = 7.x-4.22
+project = devconnect
+
+dependencies[] = devconnect_monetization
+dependencies[] = simpletest
+
+files[] = OrganizationTestCase.test

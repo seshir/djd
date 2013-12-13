@@ -1,0 +1,10 @@
+name = API Management
+description = "Swisscom API Product Management"
+package = Swisscom
+core = 7.x
+dependencies[] = entity
+dependencies[] = ctools
+dependencies[] = taxonomy_access
+
+files[] = api_management.entity.inc
+files[] = api_management.views.inc

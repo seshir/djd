@@ -1,0 +1,37 @@
+<?php
+
+/**
+ * Implementation of hook_schema().
+ */
+function devconnect_node_settings_schema() {
+  $schema['node_settings'] = array(
+    'fields' => array(
+      'node_type'  => array(
+        'type' => 'varchar',
+        'length' => 120,
+        'not null' => TRUE,
+        'description' => t("node's type.")
+      ),
+      'fields'  => array(
+        'type' => 'varchar',
+        'length' => 120,
+        'not null' => TRUE,
+      ),
+      'display_status' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'length' => 1,
+      )
+  ));
+  return $schema;
+}
+
+/**
+ * Implementation of hook_uninstall().
+ *   Drops all tables related to powerit_navbar module
+ */
+function devconnect_node_settings_uninstall() {
+  if (db_table_exists('node_settings')) {
+    db_drop_table('node_settings');
+  }
+}

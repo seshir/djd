@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the wadl_import_feature feature.
+ */
+
+include_once 'wadl_import_feature.features.inc';

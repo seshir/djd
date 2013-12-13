@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Swisscom Admin Views feature.
+ */
+
+include_once 'swisscom_admin_views.features.inc';

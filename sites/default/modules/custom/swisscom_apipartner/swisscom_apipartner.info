@@ -1,0 +1,7 @@
+name = API Partner Registration
+description = "API Partner Registration"
+package = Swisscom
+core = 7.x
+dependencies[] = entity
+dependencies[] = api_management
+version = "7.x-1.1"

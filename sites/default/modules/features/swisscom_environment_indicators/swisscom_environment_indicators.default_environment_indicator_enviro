@@ -1,0 +1,70 @@
+<?php
+/**
+ * @file
+ * swisscom_environment_indicators.default_environment_indicator_environments.inc
+ */
+
+/**
+ * Implements hook_default_environment_indicator_environment().
+ */
+function swisscom_environment_indicators_default_environment_indicator_environment() {
+  $export = array();
+
+  $environment = new stdClass();
+  $environment->disabled = FALSE; /* Edit this to true to make a default environment disabled initially */
+  $environment->api_version = 1;
+  $environment->machine = 'prod';
+  $environment->name = 'Production';
+  $environment->regexurl = 'vimappsp-apdp\\d+.it.bwns.ch';
+  $environment->settings = array(
+    'color' => '#D80825',
+    'weight' => '0',
+    'position' => 'top',
+    'fixed' => 0,
+  );
+  $export['prod'] = $environment;
+
+  $environment = new stdClass();
+  $environment->disabled = FALSE; /* Edit this to true to make a default environment disabled initially */
+  $environment->api_version = 1;
+  $environment->machine = 'stage';
+  $environment->name = 'Stage';
+  $environment->regexurl = 'vimappss-apdp0\\d.it.bwns.ch';
+  $environment->settings = array(
+    'color' => '#001155',
+    'weight' => '20',
+    'position' => 'top',
+    'fixed' => 0,
+  );
+  $export['stage'] = $environment;
+
+  $environment = new stdClass();
+  $environment->disabled = FALSE; /* Edit this to true to make a default environment disabled initially */
+  $environment->api_version = 1;
+  $environment->machine = 'test';
+  $environment->name = 'Test';
+  $environment->regexurl = '10.66.162.107';
+  $environment->settings = array(
+    'color' => '#0fa405',
+    'weight' => '30',
+    'position' => 'top',
+    'fixed' => 0,
+  );
+  $export['test'] = $environment;
+
+  $environment = new stdClass();
+  $environment->disabled = FALSE; /* Edit this to true to make a default environment disabled initially */
+  $environment->api_version = 1;
+  $environment->machine = 'dev';
+  $environment->name = 'Dev';
+  $environment->regexurl = 'vimapget-apdp1d.it.bwns.ch';
+  $environment->settings = array(
+    'color' => '#551166',
+    'weight' => '40',
+    'position' => 'top',
+    'fixed' => 0,
+  );
+  $export['dev'] = $environment;
+
+  return $export;
+}

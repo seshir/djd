@@ -1,0 +1,9 @@
+name = Swisscom SMS Token
+description = Validate Swisscom users via SMS.
+package = Swisscom
+core = 7.x
+version = "7.x-1.2"
+
+dependencies[] = cck_phone
+dependencies[] = swisscom_developer_apps
+dependencies[] = swisscom_custom

@@ -1,0 +1,637 @@
+/* Import fonts */
+@font-face{font-family:TheSaB5;src:url('fonts/thesansbasic/TheSaB5_.eot');src:url('fonts/thesansbasic/TheSaB5_.eot?#iefix') format('embedded-opentype'),url('fonts/thesansbasic/TheSaB5_.woff') format('woff'),url('fonts/thesansbasic/TheSaB5_.ttf') format('truetype'),url('fonts/thesansbasic/TheSaB5_.svg#TheSaB5_') format('svg');}
+@font-face{font-family:TheSaB3;src:url('fonts/thesansbasic/TheSaB3_.eot');src:url('fonts/thesansbasic/TheSaB3_.eot?#iefix') format('embedded-opentype'),url('fonts/thesansbasic/TheSaB3_.woff') format('woff'),url('fonts/thesansbasic/TheSaB3_.ttf') format('truetype'),url('fonts/thesansbasic/TheSaB3_.svg#TheSaB3_') format('svg');}
+@font-face{font-family:'SwisscomIcons';src:url('fonts/thesansbasic/swisscom-icons-webfont.eot');src:url('fonts/thesansbasic/swisscom-icons-webfont.eot?#iefix') format('embedded-opentype'),url('fonts/thesansbasic/swisscom-icons-webfont.woff') format('woff'),url('fonts/thesansbasic/swisscom-icons-webfont.ttf') format('truetype'),url('fonts/thesansbasic/swisscom-icons-webfont.svg#SwisscomIcons') format('svg');}
+
+
+body {
+    font-family: TheSaB5,'Trebuchet MS',Arial,Helvetica,sans-serif !important;
+    background: none repeat scroll 0 0 #F7F7F7;
+}
+.page-content,.page-header,#breadcrumb-navbar,.front .title {
+	background: none repeat scroll 0 0 #F7F7F7;
+}
+
+.front .page-content .container{
+  background: none !important;
+}
+
+.master-container {
+	background: none repeat scroll 0 0 #F7F7F7;
+	height: auto;
+}
+.navbar.navbar-fixed-top, .main-nav.navbar-inner,.navbar-inner {
+	background-color: #AC1600;
+}
+.navbar .brand {
+	padding: 1px 10px 0;
+}
+.footer {
+	float: left;
+	position: static;
+}
+
+.node-article header {
+  background-color: #F5F5F5;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05) inset;
+  display: block;
+  margin-bottom: 20px;
+  padding: 10px;
+}
+
+/* Apis page css same as 3.8 */
+.main .apisection .tabheading {
+    background: url("../images/tabheading-left-arrow.png") no-repeat scroll 0 0 transparent;
+}
+.main .apisection .tabheading {
+    font-size: 18px !important;
+    line-height: 22px;
+    margin-bottom: 12px;
+}
+.main .tabheading {
+    background: url("../images/tabheading-left.gif") no-repeat scroll 0 0 transparent;
+    color: #3C3C3C;
+}
+.main .tabheading {
+    clear: both;
+    font-size: 1.8em;
+    font-weight: bold;
+    height: 37px;
+    margin-bottom: 15px;
+    width: 100%;
+}
+.main .apisection .tabheading .inner {
+    padding-left: 30px;
+    padding-top: 8px;
+}
+.main .tabheading .inner {
+    background: url("../images/tabheading-right.gif") no-repeat scroll 100% 0 transparent;
+}
+.main .tabheading .inner {
+    overflow: hidden;
+    padding: 7px 20px 0 13px;
+}
+.main .apisection .roundbutton {
+    background: url("../images/btn-round-arrowright.png") no-repeat scroll 0 0 transparent;
+}
+.main .apisection .roundbutton {
+    display: inline-block;
+    margin: 0 17px 9px 0;
+    padding: 6px 0 0 9px;
+    width: 103px;
+}
+.roundbutton {
+    color: #3B6E8F;
+}
+.roundbutton {
+    display: block;
+    font-size: 12px;
+    font-weight: bold;
+    height: 19px;
+    line-height: 1;
+    margin: 0 auto 20px;
+    padding: 7px 0 0 33px;
+    width: 185px;
+}
+
+.btn:hover,
+.btn:active,
+.btn.active,
+.btn.disabled,
+.btn[disabled] {
+    background-color: #1F5A9D;
+}
+
+/* Home page welcome header */
+.home-header-btn {
+    border: 1px solid #18589D;
+}
+.home-header-btn,#user-register-form .btn,#user-login .btn {
+    background: #287dc2; /* Old browsers */
+	background: -moz-linear-gradient(top, #287dc2 0%, #18589d 50%, #18589d 51%, #062e73 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#287dc2), color-stop(50%,#18589d), color-stop(51%,#18589d), color-stop(100%,#062e73)); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top, #287dc2 0%,#18589d 50%,#18589d 51%,#062e73 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top, #287dc2 0%,#18589d 50%,#18589d 51%,#062e73 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top, #287dc2 0%,#18589d 50%,#18589d 51%,#062e73 100%); /* IE10+ */
+	background: linear-gradient(to bottom, #287dc2 0%,#18589d 50%,#18589d 51%,#062e73 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#287dc2', endColorstr='#062e73',GradientType=0 ); /* IE6-9 */
+}
+.navbar-inner {
+	background: #145098; /* Old browsers */
+	background: -moz-linear-gradient(top, #145098 0%, #0b387f 50%, #0b387f 51%, #001758 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#145098), color-stop(50%,#0b387f), color-stop(51%,#0b387f), color-stop(100%,#001758)); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); /* IE10+ */
+	background: linear-gradient(to bottom, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#145098', endColorstr='#001758',GradientType=0 ); /* IE6-9 */
+}
+.home-header-btn a,.home-header-btn a:hover {
+    color: #FFFFFF;
+}
+.home-header-btn .iconbtn.document {
+    background: url("../images/doc-icon.png") no-repeat scroll 0 0 transparent;
+    height: 34px;
+}
+.home-header-btn .iconbtn.key {
+    background: url("../images/key-icon.png") no-repeat scroll 0 0 transparent;
+    border: 0 none;
+    height: 20px;
+    right: 10px;
+    width: 40px;
+}
+
+.home-header-btn:hover {
+  box-shadow: 0 0 15px #2D90EC;
+}
+
+#user-register-form .btn,#user-login .btn {
+  border: none;
+}
+.form-actions {
+    background-color: transparent;
+}
+#navbar.navbar .nav > li > a {
+    background: url("../images/divider.png") no-repeat scroll 0 10px transparent;
+}
+header .navbar .nav > li > a:hover {
+	background: #1e5799; /* Old browsers */
+	background: -moz-linear-gradient(top, #1e5799 0%, #207cca 75%, #7db9e8 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#1e5799), color-stop(75%,#207cca), color-stop(100%,#7db9e8)); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top, #1e5799 0%,#207cca 75%,#7db9e8 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top, #1e5799 0%,#207cca 75%,#7db9e8 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top, #1e5799 0%,#207cca 75%,#7db9e8 100%); /* IE10+ */
+	background: linear-gradient(to bottom, #1e5799 0%,#207cca 75%,#7db9e8 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#1e5799', endColorstr='#7db9e8',GradientType=0 ); /* IE6-9 */
+}
+
+.brand div.logo {
+  display: inline-block;
+  height: 53px;
+  overflow: hidden;
+  vertical-align: middle;
+  width: 48px;
+}
+
+#logo-swisscom-name {
+    margin-top: -8px;
+}
+
+/* Theme add app button */
+.add-app{
+  background: #145098; /* Old browsers */
+  /*background: -moz-linear-gradient(top, #145098 0%, #0b387f 50%, #0b387f 51%, #001758 100%); *//* FF3.6+ */
+  /*background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#145098), color-stop(50%,#0b387f), color-stop(51%,#0b387f), color-stop(100%,#001758)); *//* Chrome,Safari4+ */
+  /*background: -webkit-linear-gradient(top, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); *//* Chrome10+,Safari5.1+ */
+  /*background: -o-linear-gradient(top, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); *//* Opera 11.10+ */
+  /*background: -ms-linear-gradient(top, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); *//* IE10+ */
+  /*background: linear-gradient(to bottom, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); *//* W3C */
+  /*filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#145098', endColorstr='#001758',GradientType=0 ); *//* IE6-9 */
+
+  background-repeat: repeat-x;
+  background: url(../images/add-icon-white.png) no-repeat 132px 12px #18589D;
+  border: 1px solid #0b387f;
+  border-radius: 5px 5px 5px 5px;
+  -moz-border-radius: 5px 5px 5px 5px;
+  -webkit-border-radius: 5px 5px 5px 5px;
+  box-shadow: 0px 0px 7px #DDDDDD;
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 600;
+  position: absolute;
+  right: 0;
+  top: 0;
+  padding: 15px 48px 15px 20px;
+}
+
+.add-app:hover {
+    background: url(../images/add-icon-white.png) no-repeat 132px 12px #0b387f;
+  color: #FFFFFF;
+}
+
+ Add space around buttons in editor
+input.form-submit, a.button {
+    margin-right: 0.5em;
+}
+
+/* Login toboggan unified login links */
+.toboggan-unified #login-links a {
+    padding: .5em;
+    border: 1px #666 solid;
+    background-color: #EEE;
+}
+
+.toboggan-unified #login-links a:hover {
+    background-color: #DDD;
+}
+
+.toboggan-unified #login-links a.lt-active,
+.toboggan-unified #login-links a.lt-active:hover {
+    background-color: #18589D;
+    border: 2px #333 solid;
+    color: #FFFFFF;
+}
+
+/* Put cck_phone_number field inline */
+.field-type-phone-number .controls .control-group,
+.field-type-phone-number .controls .control-group .controls {
+    display: inline;
+}
+
+/* Put cck_phone_number field inline */
+.field-type-phone-number .controls .control-group .control-label,
+.field-type-phone-number .controls .control-group .control-label .controls {
+    display: inline;
+}
+
+/* Add line under phone numbers */
+.page-user-edit .control-group.form-item-field-mobile-number-und-0 {
+    border-bottom: 1px solid #DDD;
+    margin-bottom: 18px;
+    padding-bottom: 18px;
+}
+
+/* Align delete button properly on app page */
+.app-delete{
+    padding: 15px 0;
+}
+.app-delete button,
+.app-delete button:hover{
+
+}
+
+/* Display form required asterisks in Red */
+.form-required {
+    color: #FF0000;
+}
+
+/* WYSIWYG & Edit node form */
+
+div.cke_dialog_ui_input_text #autocomplete li.selected * {
+  color: #0B387F;
+  cursor: default;
+}
+
+body.cke_show_borders {
+    padding-top: 0;
+}
+
+.node-form .control-group > .control-label {
+    font-weight: bold;
+}
+
+.field-name-field-node-access-level .form-type-checkbox {
+    display: inline-block;
+    padding-top: 5px;
+    margin-bottom: 0;
+    vertical-align: middle;
+    margin-left: 10px;
+}
+
+.form-item-field-node-access-level-und {
+  background-color: #CAE1FF;
+    border: 1px solid #D3D3D3;
+    border-radius: 5px 5px 5px 5px;
+    padding: 5px;
+}
+
+/* API Consoles */
+#block-views-api-console-list-block h2 {
+  font-family: 	"Helvetica Neue",​Helvetica,​Arial,​sans-serif;
+  font-size:	13px;
+  font-weight:	700;
+  line-height: 18px;
+}
+
+.console-navigation .nav-pills a.active, .console-navigation .nav-pills a:hover.active {
+  text-decoration: none;
+  background-color: #18589D;
+  color: #FFFFFF;
+}
+
+.console-navigation ul {
+  margin: 0;
+}
+
+iframe {
+  border: none;
+}
+
+#block-views-api-console-list-block {
+  width: 920px;
+  border: 1px solid #D3D3D3;
+  padding: 5px;
+  margin-bottom: 5px;
+}
+
+.select-console {
+  width: 920px;
+  height: 600px;
+  border: 1px solid #D3D3D3;
+  padding: 5px;
+  margin-bottom: 5px;
+}
+
+.select-console {
+  width: 920px;
+  height: 600px;
+  border: 1px solid #D3D3D3;
+  padding: 5px;
+  margin-bottom: 5px;
+}
+
+.select-console span {
+  display: block;
+  margin: 50px;
+  text-align: center;
+  color: #D3D3D3;
+  font-size: 35px;
+}
+
+/* Home Page - Develop with these APIs. */
+.develop-with-these .btn-primary{
+  background: #145098; /* Old browsers */
+  background: -moz-linear-gradient(top, #145098 0%, #0b387f 50%, #0b387f 51%, #001758 100%); /* FF3.6+ */
+  background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#145098), color-stop(50%,#0b387f), color-stop(51%,#0b387f), color-stop(100%,#001758)); /* Chrome,Safari4+ */
+  background: -webkit-linear-gradient(top, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); /* Chrome10+,Safari5.1+ */
+  background: -o-linear-gradient(top, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); /* Opera 11.10+ */
+  background: -ms-linear-gradient(top, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); /* IE10+ */
+  background: linear-gradient(to bottom, #145098 0%,#0b387f 50%,#0b387f 51%,#001758 100%); /* W3C */
+  filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#145098', endColorstr='#001758',GradientType=0 ); /* IE6-9 */
+  color: #FFFFFF;
+}
+
+.develop-with-these .api1 h3 {
+  background: url("/sites/default/themes/swisscom/images/api/messaging.png") no-repeat scroll 0 0 transparent;
+}
+.develop-with-these .api2 h3 {
+  background: url("/sites/default/themes/swisscom/images/api/public.png") no-repeat scroll 0 0 transparent;
+}
+
+/* Home page - Recent blog posts */
+.view-recent-blog-posts .views-field-body {
+  float: right !important;
+  margin-left: 0 !important;
+  width: 210px !important;
+}
+
+span.blog-icon{
+  background: none;
+}
+
+.recent-blog-posts-block {
+  padding-left: 20px;
+  width: 255px;
+}
+
+.recent-blog-posts-block h2{
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 15px;
+}
+
+.recent-blog-posts-block .post-date {
+  background: none repeat scroll 0 0 #FAFAFA;
+  border: 1px solid #D6D6D6;
+  border-radius: 5px 5px 5px 5px;
+  color: #959595;
+  float: left;
+  padding: 1px;
+  text-align: center;
+  width: 35px;
+}
+
+.recent-blog-posts-block .day {
+  font-size: 20px;
+  padding-bottom: 3px;
+}
+
+/* Give more space to forgot login link on login page. */
+.login-forgot {
+  padding: 5px 0;
+}
+
+/* API Business Overview */
+.biz-api-overview, .request-access {
+  border-bottom: 1px solid #E3E3E3;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  float:left;
+  width: 100%;
+}
+
+.biz-api-overview span.label a {
+  color: #fff;
+}
+.request-access h3 {
+  font-size: 29px;
+  line-height: 40px;
+}
+
+
+.request-access .buttons {
+  width: 310px;
+}
+
+.request-access .home-header-btn {
+  font-size: 14px;
+}
+
+
+.biz-api-overview h3 {
+  color: #137AAA;
+  font-size: 18px;
+  font-weight: 600;
+  padding-bottom: 5px;
+  padding-left: 40px;
+  display: inline;
+}
+
+.biz-api-overview .api {
+}
+
+.biz-api-overview .label {
+  margin-left: 5px;
+}
+
+
+.biz-api-overview p {
+  padding-left: 40px;
+}
+
+.biz-api-overview .security h3 {
+  background: url("/sites/default/themes/swisscom/images/api/security.png") no-repeat scroll 0 0 transparent;
+}
+.biz-api-overview .messaging  h3 {
+  background: url("/sites/default/themes/swisscom/images/api/messaging.png") no-repeat scroll 0 0 transparent;
+}
+.biz-api-overview .speech h3 {
+  background: url("/sites/default/themes/swisscom/images/api/speech.png") no-repeat scroll 0 0 transparent;
+}
+.biz-api-overview .carrier h3 {
+  background: url("/sites/default/themes/swisscom/images/api/carrier.png") no-repeat scroll 0 0 transparent;
+}
+.biz-api-overview .location h3 {
+  background: url("/sites/default/themes/swisscom/images/api/location.png") no-repeat scroll 0 0 transparent;
+}
+.biz-api-overview .coummuniation h3 {
+  background: url("/sites/default/themes/swisscom/images/api/communication.png") no-repeat scroll 0 0 transparent;
+}
+.biz-api-overview .swiss-knife h3 {
+  background: url("/sites/default/themes/swisscom/images/api/swiss-knife.png") no-repeat scroll 0 0 transparent;
+}
+.biz-api-overview .cloud-services h3 {
+  background: url("/sites/default/themes/swisscom/images/api/cloud-services.png") no-repeat scroll 0 0 transparent;
+}
+.biz-api-overview .monkey h3 {
+  background: url("/sites/default/themes/swisscom/images/api/monkey.png") no-repeat scroll 0 0 transparent;
+}
+.biz-api-overview .internet-things h3 {
+  background: url("/sites/default/themes/swisscom/images/api/internet-things.png") no-repeat scroll 0 0 transparent;
+}
+
+.biz-api-overview .handshake h3 {
+  background: url("/sites/default/themes/swisscom/images/api/handshake.png") no-repeat scroll 0 0 transparent;
+}
+
+/* Color code api method verbs */
+
+.field-name-field-api-method-name .field-item  {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: inline-block;
+  text-align: center;
+  box-sizing: border-box;
+  line-height: 12px;
+  border-radius: 2.5px;
+  color: white !important;
+  width: 70px;
+  padding: 5px;
+}
+
+.field-name-field-api-method-name  .field-label {
+  padding: 3px 0;
+}
+
+.api-method-GET .field-item {
+  background-color: #0064cd;
+}
+.api-method-PUT .field-item {
+  background-color: #ff7d00;
+}
+.api-method-POST .field-item {
+  background-color: #46a546;
+}
+.api-method-DELETE .field-item {
+  background-color: #BD2C00;
+}
+.api-method-undefined .field-item {
+  background-color: #848688;
+}
+
+/* User Profile Page */
+.field-name-field-admin-notes  {
+  border: 1px solid #D3D3D3;
+  border-radius: 5px 5px 5px 5px;
+  padding: 5px;
+  margin-bottom: 10px;
+  background-color: #CAE1FF;
+}
+
+
+.page-user .btn {
+  margin: 10px 0;
+}
+
+#user-profile-form .verify_btn {
+  border-bottom: 1px solid #DDDDDD;
+  border-top: none;
+}
+#user-profile-form .verify_btn .btn {
+  margin-top: -25px;
+}
+#user-profile-form .resend_sms_code {
+  margin-top: 30px;
+}
+#user-profile-form .resend_sms_code .form-type-phone-number {
+  border-bottom: none;
+}
+#user-profile-form .resend_sms_code_btn {
+  margin-top: -5px;
+}
+
+/* API overview page for partners */
+.biz-api-overview .views-row {
+  float: left;
+  width: 465px;
+}
+.view-api-partner-product .biz-api-overview h3 {
+  padding-left: 10px;
+}
+
+/* SMS Validation */
+#swisscom-smstoken-verify-form .control-label {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* API Documentation */
+
+/* Make field labels on docs the same as H2 */
+.node-api-resource-doc .field-label-above .field-label {
+  font-size: 26px;
+  line-height: 36px;
+  color: #484848;
+  font-family: inherit;
+  font-weight: normal;
+  margin: 0;
+  text-rendering: optimizelegibility;
+}
+
+.node-api-resource-doc .field-label-inline {
+  margin: 5px 0;
+}
+
+.node-api-resource-doc .field-label-inline .field-label {
+  font-size: 26px;
+  line-height: 17px;
+  color: #484848;
+  font-family: inherit;
+  font-weight: normal;
+  margin: 0;
+  text-rendering: optimizelegibility;
+}
+
+.node-api-resource-doc .field-name-field-path .field-items {
+  border-radius: 2.5px;
+  letter-spacing: 1px;
+  line-height: 12px;
+  padding: 5px;
+  text-align: center;
+}
+
+/** Blog **/
+
+.page-blog .page-content {
+  padding: 0 80px;
+}
+
+.view-id-blog .node-article header {
+  padding-top: 10px;
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+.view-id-blog .node-article .field-name-body {
+  margin-left: 11px;
+}
+
+.view-id-blog .node-article .field-name-field-image {
+  margin-left: 11px;
+}
+
+.view-id-blog .node-article .links {
+  margin-left: 1px;
+}

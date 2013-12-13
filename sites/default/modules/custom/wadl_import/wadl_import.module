@@ -1,0 +1,30 @@
+<?php
+
+// Define the subdirectory for uploading WADL files.
+define("WADL_SUBDIRECTORY", "wadl-upload");
+
+/**
+ * Implements hook_menu()
+ */
+function wadl_import_menu() {
+  $items = array();
+  $items['admin/content/wadl_import'] = array(
+    'title' => 'WADL API Documentation import',
+    'description' => t("Generate documentation from a WADL file."),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wadl_import_wadl_form'),
+    'access arguments' => array('administer nodes'),
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_init
+ */
+function wadl_import_init() {
+  module_load_include('inc', 'wadl_import', 'includes/wadl_import.components');
+  module_load_include('inc', 'wadl_import', 'includes/wadl_import.node_alter');
+  module_load_include('inc', 'wadl_import', 'includes/wadl_import.theme');
+  module_load_include('inc', 'wadl_import', 'includes/wadl_import.forms');
+  module_load_include('inc', 'wadl_import', 'includes/wadl_import.batch');
+}

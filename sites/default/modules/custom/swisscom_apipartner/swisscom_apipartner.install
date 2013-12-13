@@ -1,0 +1,64 @@
+<?php
+
+/**
+ * @file
+ * Previewable Email Template module install/schema/update hooks.
+ */
+
+/**
+ * Implementation of hook_schema().
+ */
+function swisscom_apipartner_schema() {
+  $schema = array();
+
+  $schema['swisscom_partner_registration'] = array(
+    'description' => 'API access requests made by partners.',
+    'fields' => array(
+      'pid' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'The internal identifier for any API request.',
+      ),
+      'partner_email' => array(
+        'type' => 'varchar',
+        'length' => '254',
+        'not null' => TRUE,
+        'description' => 'Partner Email address.',
+      ),
+      'partner_api_product' => array(
+        'description' => 'A serialized array of APIs requested.',
+        'type' => 'blob',
+        'serialize' => TRUE,
+      ),
+      'partner_usage_plan' => array(
+        'type' => 'text',
+        'size' => 'big',
+        'not null' => FALSE,
+        'description' => 'The name of the providing module if the entity has been defined in code.',
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Partner User ID if logged in.',
+        'default' => 0,
+      ),
+      'submitted' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'UNIXTimestamp when the request is submitted.',
+      ),
+    ),
+    'primary key' => array('pid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function swisscom_apipartner_uninstall() {
+	db_query('DROP TABLE {swisscom_partner_registration}');
+}

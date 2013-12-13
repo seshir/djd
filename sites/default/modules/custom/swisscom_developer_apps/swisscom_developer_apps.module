@@ -1,0 +1,565 @@
+<?php
+/**
+ * @file
+ * Custom app attributes for Dev Portal
+ *
+ * * @author
+ * Chris Novak <cnovak@apigee.com>
+ *
+ * @since 2013-04-Jul
+ */
+
+/**
+ * Implements hook_menu()
+ */
+function swisscom_developer_apps_menu() {
+  $items = array();
+  $items['admin/config/swisscom_developer_apps'] = array(
+    'title' => 'Swisscom API Keys',
+    'description' => 'Custom settings for Swisscom Developer apps.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('swisscom_developer_apps_admin_settings'),
+    'access arguments' => array('access administration pages'),
+    'file' => 'swisscom_developer_apps.admin.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Implementation of hook_permission().
+ */
+function swisscom_developer_apps_permission() {
+  return array(
+    'bypass api access' => array(
+      'title' => t('Bypass API access control'),
+      'description' => t('Create API keys for all products regardless of permission restrictions.'),
+      'restrict access' => TRUE,
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_menu_alter().
+ * @param $items
+ */
+function swisscom_developer_apps_menu_alter(&$items) {
+  $items['user/%user/apps']['page callback'] = 'swisscom_developer_apps_getlist';
+  $items['user/%user/apps']['title'] = t('My API Keys');
+
+  $items['user/%user/apps/add']['page arguments'] = array('swisscom_developer_apps_edit_form', 1);
+
+  $items['user/%user/apps/%/edit-app']['page arguments'] = array('swisscom_developer_apps_edit_form', 1, 3);
+  $items['user/%user/apps/%/edit-app']['title'] = t('Edit API key');
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function swisscom_developer_apps_form_devconnect_developer_apps_edit_form_alter(&$form, &$form_state, $form_id) {
+  // Add a "select a value" to the product select and make product required.
+  $form['api_product']['#required'] = TRUE;
+  unset($form['api_product']['#default_value']);
+  $form['api_product']['#attributes'] = array('title' => t('-- Select APIs --'));
+  $form['api_product']['#title'] = t("API(s)");
+
+  // Put in our own submit function in order to call rules
+  array_unshift($form['actions']['submit']['#submit'], 'swisscom_developer_apps_form_developer_apps_edit_form_submit');
+}
+
+/**
+ * Submit developer apps form to save user profile fields.
+ */
+function swisscom_developer_apps_form_developer_apps_edit_form_submit($form, &$form_state) {
+  global $user;
+
+  // Call rules in order to to things when app is created.
+  $app_obj = new stdClass();
+  $app_obj->name = $form_state['values']['machine_name'];
+
+  rules_invoke_event('developer_app_created', $user, $app_obj);
+
+}
+
+
+/**
+ * Page callback for "My Apps"
+ *
+ * @param $user
+ *
+ * @return string
+ * @throws Exception
+ */
+function swisscom_developer_apps_getlist($user) {
+  $module_path = drupal_get_path('module', 'devconnect_developer_apps');
+  $library_path = libraries_get_path('jquery.selectlist');
+  drupal_add_js($library_path . '/scripts/jquery.selectlist.min.js');
+  drupal_add_css($library_path . '/css/selectlist.css');
+  drupal_add_css("$module_path/devconnect_developer_apps.css");
+  drupal_add_js(drupal_get_path('module', 'swisscom_developer_apps') . '/swisscom_developer_apps.js');
+
+  try {
+    module_load_include('module', 'devconnect');
+    $client = devconnect_default_api_client();
+    $dc = new Apigee\ManagementAPI\DeveloperApp($client, $user->mail, (bool)variable_get('devconnect_appname_bug', TRUE));
+    $app_names = $dc->get_list();
+    if (count($app_names) == 0) {
+      $parameters = array(
+        'application_count' => 0,
+        'applications' => array(),
+        'user' => $user
+      );
+    }
+    else {
+      $rows = array();
+      foreach ($app_names as $app_name) {
+        $dc->load($app_name);
+        $row = array(
+          'app_name' => $dc->get_name(),
+          'callback_url' => $dc->get_callback_url(),
+          'attributes' => _swisscom_developer_apps_get_attributes($dc->get_attributes()),
+          'credential' => array(
+            'apiProducts' => $dc->get_credential_api_products(),
+            'consumerKey' => $dc->get_consumer_key(),
+            'consumerSecret' => $dc->get_consumer_secret(),
+            'scopes' => $dc->get_credential_scopes(),
+            'status' => $dc->get_credential_status()
+          ),
+          'delete_url' => 'user/' . $user->uid . '/apps/' . $app_name . '/delete',
+          'edit_url' => 'user/' . $user->uid . '/apps/' . $app_name . '/edit-app'
+        );
+        $rows[] = $row;
+      }
+      $parameters = array(
+        'application_count' => count($rows),
+        'applications' => $rows,
+        'user' => $user,
+      );
+    }
+    // Invoke hook_devconnect_developer_app_list_alter() on this parm list.
+    drupal_alter('devconnect_developer_app_list', $parameters);
+
+    return theme('devconnect_developer_apps_list', $parameters);
+  }
+  catch (Exception $e) {
+    // TODO: find a more elegant way of communicating error condition
+    $code = $e->getCode();
+    $status = $e->getMessage();
+    $error = "STATUS: $code - $status; ";
+    $error .= "Communication with the Apigee endpoint is compromised. Cannot get API Products List.";
+    if (user_access("administer organization settings")) {
+      $error .= "<pre>" . $client->get_response_string() . "</pre>";
+    }
+    watchdog('devconnect_developer_apps', $error, array(), WATCHDOG_ERROR);
+    return "<h4>" . $error . "</h4>";
+  }
+}
+
+/**
+ * Helper function to get displayable attributes.
+ *
+ * @param $app_attributes
+ * @return array
+ */
+function _swisscom_developer_apps_get_attributes($app_attributes) {
+  // Invoke custom hook
+  $shown_attributes = module_invoke_all('devconnect_attributes_display_list');
+  $items = array();
+  foreach ($shown_attributes as $attr_name => $attr_display) {
+    foreach ($app_attributes as $result_attr) {
+
+      if ($result_attr['name'] == $attr_name) {
+        $items[$attr_name] = $result_attr['value'];
+        break;
+      }
+
+    }
+  }
+  return $items;
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ *
+ * Substitutes Swisscom-specific templates for developer apps.
+ */
+function swisscom_developer_apps_theme_registry_alter(&$theme_registry) {
+  $template_path = drupal_get_path('module', 'swisscom_developer_apps') . '/templates';
+
+  $theme_registry['devconnect_developer_apps_list']['template'] = 'swisscom_developer_apps_list';
+  $theme_registry['devconnect_developer_apps_list']['path'] = $template_path;
+
+  $theme_registry['devconnect_developer_app']['template'] = 'swisscom_developer_app';
+  $theme_registry['devconnect_developer_app']['path'] = $template_path;
+
+}
+
+/**
+ * Implementation of hook_rules_event_info().
+ * @ingroup rules
+ */
+function swisscom_developer_apps_rules_event_info() {
+  return array(
+    'developer_app_created' => array(
+      'label' => t('An API key was created'),
+      'group' => t('Dev Portal'),
+      'variables' => array(
+        'acting_user' => array('type' => 'user', 'label' => t('The user who created the API key.')),
+        'app_name' => array('type' => 'devportal_app', 'label' => t('The created API Key name.')),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_rules_data_info() on behalf of the system module.
+ * @see rules_core_modules()
+ */
+function swisscom_developer_apps_rules_data_info() {
+  return array(
+    'devportal_app' => array(
+      'label' => t('dev portal app'),
+      'wrap' => TRUE,
+      'property info' => _swisscom_developer_apps_app_entry_info(),
+    ),
+  );
+}
+
+/**
+ * Defines property info dev portal apps.
+ */
+function _swisscom_developer_apps_app_entry_info() {
+  return array(
+    'name' => array(
+      'type' => 'text',
+      'label' => t('The app name'),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_tokens().
+ */
+function swisscom_developer_apps_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  if ($type == 'devportal_app') {
+    if(isset($data['devportal_app'])) {
+      $replacements = array();
+      $app = $data['devportal_app'];
+      foreach ($tokens as $name => $original) {
+        switch ($name) {
+          case 'name':
+            $replacements[$original] = $app->name;
+            break;
+        }
+      }
+      return $replacements;
+    }
+  }
+}
+
+/**
+ * Implements hook_default_rules_configuration().
+ */
+function swisscom_developer_apps_default_rules_configuration() {
+  $rules_decrement_stock_completing_order = '{ "rules_new_app_email_admins" : {
+    "LABEL" : "New App - Email Admins",
+    "PLUGIN" : "reaction rule",
+    "TAGS" : [ "swisscom" ],
+    "REQUIRES" : [ "rules", "swisscom_developer_apps" ],
+    "ON" : [ "developer_app_created" ],
+    "DO" : [
+        { "mail_to_users_of_role" : {
+            "roles" : { "value" : { "5" : "5" } },
+            "subject" : "[site:name] Key Request: [site:current-user] app [app-name:name] needs approval",
+            "message" : "The user [site:current-user] has created the new application [app-name:name] which needs to be approved in the Enterprise Management Server.\r\n\r\n1. Login to the management server\r\n2. Go to Admin - Apps\r\n3. Approve or Delete any key requests.\r\n\r\nNOTE: This is on the UAT instance, not PROD.",
+            "from" : [ "" ]
+          }
+        }
+      ]
+    }
+  }';
+  $configs['rules_new_app_email_admins'] = rules_import($rules_decrement_stock_completing_order);
+
+  return $configs;
+}
+
+
+/**
+ * Overriding core function for adding/editing apps to allow API Product selections based on role.
+ * Form constructor for adding/editing apps. Built via a menu callback to drupal_get_form().
+ *
+ * Incoming URL: user/%user/apps/add
+ *
+ * @return array
+ */
+function swisscom_developer_apps_edit_form($form, &$form_state, $account, $app_name = NULL) {
+  module_load_include("module", "devconnect");
+  $client = devconnect_default_api_client();
+  $dc = new Apigee\ManagementAPI\DeveloperApp($client, $account->mail, (bool)variable_get('devconnect_appname_bug', TRUE));
+
+  if (isset($app_name)) {
+    try {
+      $dc->load($app_name);
+    } catch (Exception $e) {
+      watchdog('devconnect_developer_apps', $e->getMessage(), array(), WATCHDOG_WARNING);
+      drupal_not_found();
+      exit;
+    }
+  }
+  // Set Title
+  if (isset($app_name)) {
+    $header_caption = t('Editing API key @app', array('@app' => $app_name));
+    //drupal_set_title($header_caption);
+    $button_caption = t('Save API Key');
+  }
+  else {
+    drupal_set_title('Add API key');
+    $header_caption = 'API key add form';
+    $button_caption = t('Create API key');
+  }
+  $owner_name = ($account->uid == $GLOBALS['user']->uid ? 'My' : $account->name . "'s");
+
+  // Build Breadcrumbs
+  $breadcrumb = array();
+  $breadcrumb[] = l('Home', '<front>');
+  $breadcrumb[] = l("$owner_name API keys", 'user/' . $account->uid . '/apps');
+
+
+  // Set Breadcrumbs
+  drupal_set_breadcrumb($breadcrumb);
+
+  $form = array();
+
+  $form['header'] = array(
+    '#type' => 'legend',
+    '#title' => $header_caption,
+  );
+
+  if (isset($app_name)) {
+    $form['existing_machine_name'] = array(
+      '#type' => 'item',
+      '#title' => t('API Key Name'),
+      '#markup' => check_plain($app_name),
+      '#id' => 'existing_machine_name'
+    );
+    $form['machine_name'] = array(
+      '#type' => 'value',
+      '#value' => $app_name
+    );
+
+  }
+  else {
+    $form['machine_name'] = array(
+      '#title' => t('Key Name'),
+      '#type' => 'textfield',
+      '#id' => 'new_machine_name',
+      '#default_value' => '',
+      '#required' => TRUE,
+      '#size'=> 145,
+    );
+  }
+  // $form['access_type'] = array(
+  //   '#title' => t('Access'),
+  //   '#type' => 'select',
+  //   '#id' => 'new_access_type',
+  //   '#options' => array('none' => 'none', 'read' => 'read', 'write' => 'write', 'both' => 'both'),
+  //   '#required' => TRUE,
+  //   '#default_value' => (isset($app_details) ? $app_details['accessType'] : NULL),
+  // );
+  //$form['callback_url'] = array(
+  //  '#title' => t('Callback URL'),
+  //  '#type' => 'textfield',
+  //  '#id' => 'new_callback_url',
+  //  '#default_value' => (isset($app_name) ? $dc->get_callback_url() : ''),
+  //  '#required' => TRUE,
+  //  '#size'=> 145,
+  //);
+
+  // Invoke hook_devconnect_app_attributes to see if a custom module has
+  // defined custom attributes to appear in this form.
+  $custom_attributes = module_invoke_all('devconnect_app_attributes');
+  foreach ($custom_attributes as $machine_name => $attribute) {
+    $name = $attribute['name'];
+    $default_value = (array_key_exists('default', $attribute) ? $attribute['default'] : NULL);
+    $description = (array_key_exists('description', $attribute) ? $attribute['description'] : NULL);
+    $required = (array_key_exists('required', $attribute) ? (bool) $attribute['required'] : FALSE);
+    $max_length = (array_key_exists('maxlength', $attribute) ? $attribute['maxlength'] : NULL);
+    $pattern = (array_key_exists('pattern', $attribute) ? $attribute['pattern'] : NULL);
+    $tooltip = (array_key_exists('tooltip', $attribute) ? $attribute['tooltip']: NULL);
+    $type = (array_key_exists('type', $attribute) ? $attribute['type'] : 'textfield');
+
+    $form_field_name = 'attribute_' . $machine_name;
+
+    if ($type == 'value') {
+      $form[$form_field_name] = array('#type' => 'value', '#value' => $default_value);
+    }
+    else {
+      if (isset($app_name)) {
+        $default_value = $dc->get_attribute($machine_name);
+      }
+
+      $form[$form_field_name] = array(
+        '#title' => t($name),
+        '#type' => $type,
+        '#default_value' => $default_value,
+        '#required' => $required
+      );
+      if ($description) {
+        $form[$form_field_name]['#description'] = t($description);
+      }
+      if ($max_length) {
+        $form[$form_field_name]['#maxlength'] = $max_length;
+      }
+      if ($pattern) {
+        $form[$form_field_name]['#attributes']['pattern'] = $pattern;
+        $form[$form_field_name]['#element_validate'][] = 'devconnect_developer_apps_pattern_validate';
+      }
+      if ($tooltip) {
+        $form[$form_field_name]['#attributes']['title'] = $tooltip;
+      }
+    }
+  }
+
+  // Get the API name taxonomy terms
+  $options = array();
+  $api_name_vid = variable_get('swisscom_developer_apps_vocabulary_id', NULL);
+  if($api_name_vid == 0) {
+    drupal_set_message('Developer apps vocabulary is not set, please <a href="@url">configure the Developer App settings.</a>', array('@url' => url('admin/config/swisscom_developer_apps')),'error');
+  }
+  else {
+    $api_name_terms = taxonomy_get_tree($api_name_vid, 0, NULL, TRUE);
+
+    foreach ($api_name_terms as $api_name_term) {
+      // Product display name is the taxonomy term name
+      $product_display_name = $api_name_term->name;
+
+      // Get the API access field
+      $field_api_access_items = field_get_items('taxonomy_term', $api_name_term, 'field_api_access');
+      if($field_api_access_items) {
+        $first_item = array_shift($field_api_access_items);
+        // Get the URI
+        $api_access = $first_item['value'];
+      }
+
+      $field_api_product_name = variable_get('swisscom_developer_apps_product_field',NULL);
+      if(!$field_api_product_name) {
+        drupal_set_message(t('API product field configuration not set. Please <a href="@url">configure the Developer App settings.</a>', array('@url' => url('admin/config/swisscom_developer_apps'))), 'error', FALSE);
+        continue;
+      }
+      // Get the API product name
+      $field_items = field_get_items('taxonomy_term', $api_name_term, $field_api_product_name);
+      if($field_items) {
+        $first_item = array_shift($field_items);
+        // Get the URI
+        $product_name = $first_item['value'];
+
+        // If the product is not public, filter by API product roles.
+        //Api User has permission to access this product - user has role
+//          if ( isset($user->roles[$item['api_roles_value']]) ) {
+        // If the user is not someone w/bypass api access privilege, make sure they can see the products.
+        if (user_access('bypass api access') || $api_access == 'public' || in_array($product_display_name,array_values($account->roles))) {
+          $options['prod-' . $product_name] = $product_display_name;
+        }
+      }
+    }
+  }
+
+  $preexisting_api_products = array();
+  $api_product_default = array();
+  $client_key = NULL;
+  if (isset($app_name)) {
+    $client_key = $dc->get_consumer_key();
+    foreach ($dc->get_credential_api_products() as $api_product) {
+      $api_product_default[] = 'prod-' . $api_product['apiproduct'];
+      $preexisting_api_products[] = $api_product;
+    }
+    if (count($preexisting_api_products) > 0) {
+      sort($preexisting_api_products);
+    }
+  }
+
+  $form['preexisting_api_products'] = array(
+    '#type' => 'value',
+    '#value' => $preexisting_api_products
+  );
+  $form['client_key'] = array(
+    '#type' => 'value',
+    '#value' => $client_key
+  );
+
+  $form['api_product'] = array(
+    '#title' => t('APIs'),
+    '#type' => 'select',
+    '#id' => 'api_product',
+    '#options' => $options,
+    '#default_value' => $api_product_default,
+    '#multiple' => TRUE,
+    '#required' => TRUE, 
+  );
+
+  // Add jQuery Select List Plugin
+  if ($path = libraries_get_path('jquery.selectlist')) {
+    drupal_add_js($path . '/scripts/jquery.selectlist.min.js');
+    drupal_add_js(drupal_get_path('module', 'swisscom_developer_apps') . '/swisscom_developer_apps.js');
+    drupal_add_css($path . '/css/selectlist.css');
+    drupal_add_css(drupal_get_path('module', 'devconnect_developer_apps') . '/devconnect_developer_apps.css');
+  }
+
+//  if (count($options) == 1) {
+//    $api_product = array_keys($options);
+//    $form['api_product']['#default_value'] = array($api_product[0] => 1);
+//    $form['api_product']['#access'] = FALSE;
+//  }
+
+  $form['uid'] = array(
+    '#type' => 'value',
+    '#id' => 'uid',
+    '#value' => $account->uid,
+  );
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => $button_caption,
+    '#weight' => 10,
+    '#submit' => array('devconnect_developer_apps_edit_form_submit')
+  );
+
+  $form['#validate'] = array('devconnect_developer_apps_edit_form_validate');
+
+  // Set HTML5 required attribute on all required elements
+  /*
+  foreach ($form as $key => $value) {
+    if (substr($key, 0, 1) != '#' && isset($value['#required']) && $value('#required')) {
+      $form[$key]['#attributes']['required'] = 'required';
+    }
+  }
+  */
+
+  $form_state['storage']['app'] = $dc;
+  return $form;
+}
+
+/**
+ * Take some action right after a developer app is saved.
+ *
+ * @param $results (associative array returned from KMS)
+ * @param $form_state (array)
+ *   consists of $form_state from devconnect_developer_apps_edit_form.
+ *   $form_state['storage']['app'] holds the Apigee\ManagementAPI\DeveloperApp
+ *   object.
+ */
+function swisscom_developer_apps_devconnect_developer_app_save($results,&$form_state) {
+  global $user;
+  if(count($results['values']['api_product']) == 0 ) {
+	$dca = $results['storage']['app'];
+	$dca->setKeyStatus(FALSE);
+  } else {
+    $dca = $results['storage']['app'];
+	$dca->setKeyStatus(TRUE);
+  }
+  drupal_goto("user/$user->uid/app-detail/".$results['values']['machine_name']);
+}

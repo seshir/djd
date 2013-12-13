@@ -1,0 +1,2021 @@
+<?php
+
+define('MONETIZATION_ADMIN_ROLE_NAME', 'Monetization Administrator');
+define('MONETIZATION_FINANCE_ADMIN_ROLE_NAME', 'Finance Administrator');
+define('MONETIZATION_DEVELOPER_ROLE_NAME', 'Developer');
+
+use Apigee\ManagementAPI\DeveloperApp;
+use Apigee\Commerce\Types\DeveloperTncsActionType;
+use Apigee\Commerce\TermAndCondition;
+use Apigee\Util\Log;
+use Apigee\Util\Debugger;
+use Apigee\Exceptions\NotFoundException;
+use Apigee\Commerce\DataStructures\RatePlanRate;
+use Apigee\Commerce\Limit;
+use Apigee\Commerce\Developer;
+use Apigee\Commerce\Organization;
+use Apigee\Commerce\Types\QuotaType;
+use Apigee\Commerce\Product;
+use Apigee\Commerce\MonetizationPackage;
+use Apigee\Commerce\Types\MeteringType;
+use Apigee\Commerce\DataStructures\RatePlanDetail;
+use Apigee\Commerce\RatePlan;
+use Apigee\Commerce\Exceptions\CommerceApiException;
+use Apigee\Commerce\DeveloperRatePlan;
+use Apigee\Commerce\Types\DurationType;
+use Apigee\Commerce\Types\DeveloperType;
+use Apigee\Commerce\Types\BillingType;
+
+/**
+ * Implements hook_variable_info().
+ */
+function devconnect_monetization_variable_info($options = array()) {
+  $variables['devconnect_monetization_org'] = array(
+    'type' => 'string',
+    'title' => t("Devconnect Monetization Organization"),
+    'default' => variable_get('devconnect_org', DEVCONNECT_APIGEE_DEFAULT_ORG),
+    'description' => t('The Monetization organization name. Changing this value could make parts of your site not work.'),
+    'required' => TRUE,
+    'group' => 'devconnect'
+  );
+
+  $variables['devconnect_monetization_default_role'] = array(
+      'type' => 'select',
+      'title' => t('Default Monetization Role'),
+      'default' => variable_get('devconnect_monetization_default_role', MONETIZATION_ADMIN_ROLE_NAME),
+      'options' => array(
+        MONETIZATION_ADMIN_ROLE_NAME => MONETIZATION_ADMIN_ROLE_NAME,
+        MONETIZATION_FINANCE_ADMIN_ROLE_NAME => MONETIZATION_ADMIN_ROLE_NAME,
+        MONETIZATION_DEVELOPER_ROLE_NAME => MONETIZATION_ADMIN_ROLE_NAME,
+      ),
+  );
+
+  $variables['devconnect_monetization_endpoint'] = array(
+    'type' => 'url',
+    'title' => t("Monetization Endpoint"),
+    'default' => variable_get('devconnect_endpoint', DEVCONNECT_APIGEE_DEFAULT_ENDPOINT),
+    'description' => t('URL to which to make Apigee Monetization REST calls.'),
+    'required' => TRUE,
+    'group' => 'devconnect'
+  );
+
+  $variables['devconnect_monetization_curlauth'] = array(
+    'type' => 'string',
+    'title' => t("Authentication for the Monetization Endpoint"),
+    'default' => variable_get('devconnect_curlauth', DEVCONNECT_APIGEE_DEFAULT_USER . ':' . DEVCONNECT_APIGEE_DEFAULT_PASSWORD),
+    'description' => t('Will be used to authenticate with the Monetization endpoint. Separate the Username and Password with a colon (e.g. "guest:secret").'),
+    'required' => TRUE,
+    'format callback' => 'devconnect_format_endpoint_auth',
+    'group' => 'devconnect'
+  );
+
+  $variables['devconnect_monetization_test_user_enabled'] = array(
+    'type' => 'boolean',
+    'title' => t("Enable test user"),
+    'default' => variable_get('devconnect_monetization_test_user_enabled', FALSE),
+    'description' => t('Epoint will be hit with test user instead of user currently logged in.'),
+    'required' => FALSE,
+    'group' => 'devconnect'
+  );
+
+  $variables['devconnect_monetization_test_user'] = array(
+    'type' => 'string',
+    'title' => t("Test user email for testing purposes"),
+    'default' => variable_get('devconnect_monetization_test_user', 'dev1@scm.com'),
+    'description' => t('Will be used as test user in endpoint.'),
+    'required' => TRUE,
+    'group' => 'devconnect'
+  );
+
+  $variables['devconnect_monetization_debug_endpoint_response'] = array(
+    'type' => 'boolean',
+    'title' => t("Display error messages returned by Monetization Endpoint"),
+    'default' => variable_get('devconnect_monetization_debug_endpoint_response', FALSE),
+    'description' => t('Will display Monetization Endpoint error messages as warnings.'),
+    'required' => FALSE,
+    'group' => 'devconnect'
+  );
+
+  return $variables;
+}
+
+/**
+ * Returns the APIClient singleton for this instance's org/endpoint pair.
+ *
+ * @return Apigee\Util\APIClient
+ */
+function devconnect_monetization_default_api_client() {
+  $org = variable_get('devconnect_monetization_org', variable_get('devconnect_org', DEVCONNECT_APIGEE_DEFAULT_ORG));
+  $endpoint = variable_get('devconnect_monetization_endpoint', variable_get('devconnect_endpoint', DEVCONNECT_APIGEE_DEFAULT_ENDPOINT));
+  $curl_auth = variable_get('devconnect_monetization_curlauth', variable_get('devconnect_curlauth', DEVCONNECT_APIGEE_DEFAULT_USER . ':' . DEVCONNECT_APIGEE_DEFAULT_PASSWORD));
+  $curl_auth = devconnect_get_endpoint_auth($curl_auth);
+  list($username, $password) = explode(':', $curl_auth, 2);
+
+  $client = Apigee\Util\APIClient::getInstance($endpoint, $org, $username, $password);
+  return $client;
+}
+
+/**
+ * Implements hook_menu()
+ */
+function devconnect_monetization_menu () {
+
+  $items = array();
+
+  $items['users/me/monetization/packages'] = array(
+    'title'            => 'Monetization',
+    'page callback'    => 'devconnect_monetization_packages',
+    'page arguments'   => array(1),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access monetization'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['users/me/monetization/packages/%'] = array(
+    'title'            => 'Packages',
+    'page callback'    => 'devconnect_monetization_package_getdetails',
+    'page arguments'   => array(1, 4),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access monetization'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['users/me/monetization/packages/%/rate-plans/%'] = array(
+    'title'            => 'Packages',
+    'page callback'    => 'devconnect_monetization_package_getdetails',
+    'page arguments'   => array(1, 4, 6),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access monetization'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['users/me/monetization/packages/%/delete/%'] = array(
+      'title'            => 'Packages',
+      'page callback'    => 'devconnect_monetization_remove_plan_from_user',
+      'page arguments'   => array(4, 6),
+      'access callback'  => 'user_access',
+      'access arguments' => array('access monetization'),
+      'type'             => MENU_CALLBACK,
+  );
+
+  $items['users/me/monetization/packages/%/rate-plans/%/dev-rate-plans/%'] = array(
+    'title'            => 'Confirm Override Plan',
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('devconnect_monetization_overlap_plan_form', 1, 4, 6, 8, 9),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access monetization'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['users/me/monetization/billing'] = array(
+    'title'            => 'Billing',
+    'page callback'    => 'devconnect_monetization_billing',
+    'page arguments'   => array(1),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access monetization'),
+    'file'             => 'devconnect_monetization.billing.inc',
+    'file path'        => drupal_get_path('module', 'devconnect_monetization'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['users/me/monetization/billing/%/%'] = array(
+    'title'            => 'Download Report',
+    'page callback'    => 'devconnect_monetization_download_report',
+    'page arguments'   => array(4, 5),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access monetization'),
+    'file'             => 'devconnect_monetization.billing.inc',
+    'file path'        => drupal_get_path('module', 'devconnect_monetization'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['checkout/%/complete'] = $items['users/me/monetization/billing'];
+  $items['checkout/%/complete']['page callback'] = 'drupal_goto';
+  $items['checkout/%/complete']['page arguments'] = array('users/me/monetization/billing');
+
+  $items['users/me/monetization/company/edit'] = array(
+    'title'            => 'Company Profile',
+    'page callback'    => 'devconnect_monetization_company_profile_form',
+    'page arguments'   => array(1),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access monetization'),
+    'type'             => MENU_CALLBACK,
+    'file'             => 'devconnect_monetization.company_profile.inc',
+    'file path'        => drupal_get_path('module', 'devconnect_monetization'),
+  );
+
+  $items['users/me/monetization/developers'] = array(
+    'title'            => 'Get Developers For Autocomplete',
+    'page callback'    => 'devconnect_monetization_users_autocomple',
+    'page arguments'   => array(4),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access monetization'),
+    'type'             => MENU_CALLBACK,
+    'file'             => 'devconnect_monetization.company_profile.inc',
+    'file path'        => drupal_get_path('module', 'devconnect_monetization'),
+  );
+
+  $items['users/me/monetization/create-report'] = array(
+    'title'            => 'Create Revenue Report',
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('devconnect_monetization_developer_report_form'),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access monetization'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['users/me/monetization/accepted-product/%'] = array(
+    'title'            => 'Get Products Accepted By Developer',
+    'page callback'    => 'devconnect_monetization_accepted_products',
+    'page arguments'   => array(1, 4),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access monetization'),
+    'type'             => MENU_CALLBACK,
+  );
+  $items['users/me/monetization/company/remove-developer/%'] = array(
+    'page callback'    => 'devconnect_monetization_user_remove_from_company',
+    'page arguments'   => array(5),
+    'access callback'  => 'user_access',
+    'access arguments' => array('access monetization'),
+    'type'             => MENU_CALLBACK,
+    'file'             => 'devconnect_monetization.company_profile.inc',
+    'file path'        => drupal_get_path('module', 'devconnect_monetization'),
+  );
+  $items['users/me/monetization/billing-document/%'] = array(
+    'title'            => 'Get Billing Document',
+    'page callback'    => 'devconnect_monetization_billing_get_billing_document',
+    'page arguments'   => array(4),
+    'access callback'  => 'user_access',
+    'access arguments'  => array('access monetization'),
+    'type'             => MENU_CALLBACK,
+    'file'             => 'devconnect_monetization.billing.inc',
+    'file path'        => drupal_get_path('module', 'devconnect_monetization'),
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_ini()
+ */
+function devconnect_monetization_init() {
+  $GLOBALS['devconnect_monetization_test_user_enabled'] = (bool)variable_get('devconnect_monetization_test_user_enabled', FALSE);
+  $GLOBALS['devconnect_monetization_test_user'] = variable_get('devconnect_monetization_test_user', 'dev1@scm.com');
+  $GLOBALS['devconnect_monetization_debug_endpoint_response'] = variable_get('devconnect_monetization_debug_endpoint_response', FALSE);
+}
+
+function devconnect_monetization_packages () {
+  $developer_id =  _devconnect_monetization_get_developer_id();
+  drupal_set_title(t('Catalog & Plans'));
+
+  $messages = drupal_get_messages('status', FALSE);
+  $message_ends_with = 'has been purchased.';
+  $length = strlen($message_ends_with);
+  $was_plan_purchased = FALSE;
+  if (isset($messages['status'])) {
+    foreach ($messages['status'] as $message) {
+      if (substr($message, -$length) === $message_ends_with) {
+        $was_plan_purchased = TRUE;
+        break;
+      }
+    }
+  }
+
+  try {
+    $client = devconnect_monetization_default_api_client();
+    $monetization_packages = new MonetizationPackage($client);
+    $packages = $monetization_packages->getPackagesWithPublishedRatePlans($developer_id);
+    $developer_rate_plan = new DeveloperRatePlan($developer_id, $client);
+
+    $variables = array();
+    foreach ($packages as $package) {
+      //TODO Remove the following "if" statement in phase 2, phase 1 does not include Virtual Currency
+      $vc = $package->getVirtualCurrency();
+      if (isset($vc)) continue;
+      $variables['packages'][$package->getId()] = array(
+        'displayName' => $package->getDisplayName(),
+        'description' => $package->getDescription(),
+        'products' => array(),
+        'products_list' => array(),
+      );
+      $products_list = array();
+      foreach ($package->getProducts() as $product) {
+        $variables['packages'][$package->getId()]['products_list'][$product->getId()] = array(
+          'displayName' => $product->getDisplayName(),
+          'name'        => $product->getName(),
+          'description' => $product->getDescription(),
+        );
+        $variables['packages'][$package->getId()]['products'][] = $product->getDisplayName();
+      }
+    }
+
+    $purchased_plans = array();
+    $developer_rate_plans = $developer_rate_plan->getList();
+    foreach ($developer_rate_plans as $developer_rate_plan) {
+      $rate_plan = $developer_rate_plan->getRatePlan();
+      $package_id = $rate_plan->getMonetizationPackage()->getId();
+      $rate_plan_id = $developer_rate_plan->getId();
+      $org_timezone = new DateTimeZone($rate_plan->getOrganization()->getTimezone());
+      $utc_timezone = new DateTimeZone('UTC');
+
+
+      $start_date = DateTime::createFromFormat('Y-m-d H:i:s', $developer_rate_plan->getStartDate(), $utc_timezone);
+
+      $end_date = is_null($developer_rate_plan->getEndDate()) ? '--' : DateTime::createFromFormat('Y-m-d H:i:s', $developer_rate_plan->getEndDate(), $utc_timezone);
+
+      $today = new DateTime('today', $utc_timezone);
+
+      if ($start_date > $today) {
+        $action = l(t('Cancel'), 'users/me/monetization/packages/' . rawurlencode($rate_plan->getMonetizationPackage()->getId()) . '/delete/' . rawurlencode($rate_plan_id),
+            array('attributes' => array('class' => array('btn'))));
+      }
+      else {
+        $action = '&nbsp;';
+      }
+      $purchased_plans[$package_id][$rate_plan_id] = array(
+        'package' => $rate_plan->getMonetizationPackage()->getDisplayName(),
+        'package_id' => $rate_plan->getMonetizationPackage()->getId(),
+        'rate_plan' => $rate_plan->getDisplayName(),
+        'rate_plan_id' => $rate_plan->getId(),
+        'action' => $action,
+        'start_date' => $start_date->setTimezone($org_timezone)->format('m-d-Y'),
+        'end_date' => $end_date != '--' ? $end_date->setTimezone($org_timezone)->format('m-d-Y') : '--',
+        'renewal_date' => strlen($developer_rate_plan->getRenewalDate()) ? DateTime::createFromFormat('Y-m-d H:i:s', $developer_rate_plan->getRenewalDate(), $utc_timezone)->setTimezone($org_timezone)->format('m-d-Y') : '--',
+        'products' => array(),
+      );
+
+      foreach ($rate_plan->getMonetizationPackage()->getProducts() as $product) {
+        $purchased_plans[$package_id][$rate_plan_id]['products'][] = $product->getDisplayName();
+      }
+      $purchased_plans[$package_id][$rate_plan_id]['products'] = implode(', ', array_unique($purchased_plans[$package_id][$rate_plan_id]['products']));
+    }
+
+    // Sort purchased plans:
+    // Start Date DESC
+    // End Date ASC
+    $sorted_purchased_plans = array();
+    $today = date_create('now');
+    $dates = array();
+    foreach($purchased_plans as $package_id => $plans) {
+      foreach ($plans as $plan) {
+        $start_date = date_create_from_format('m-d-Y', $plan['start_date']);
+        $end_date = date_create_from_format('m-d-Y', $plan['end_date']);
+        if ($end_date !== FALSE // if plan date is set
+            && $start_date <= $today // if plan was purchased today or before today
+            && $end_date < $start_date // plan was also ended today
+        ) {
+          // Shift end_date to start_date
+          // REF: COMMERCE-558
+          $plan['end_date'] = $plan['start_date'];
+        }
+        $sorted_purchased_plans[] = $plan;
+      }
+    }
+
+    usort($sorted_purchased_plans, function($v1, $v2){
+      $v1_start_date = date_create_from_format('m-d-Y', $v1['start_date']);
+      $v2_start_date = date_create_from_format('m-d-Y', $v2['start_date']);
+
+      if ($v1_start_date < $v2_start_date) {
+        return 1;
+      }
+      else if ($v1_start_date > $v2_start_date) {
+        return -1;
+      }
+      else {
+        $v1_end_date = date_create_from_format('m-d-Y', $v1['end_date']);
+        $v2_end_date = date_create_from_format('m-d-Y', $v2['end_date']);
+        if ($v1_end_date === FALSE && $v2_end_date === FALSE) {
+          return 0;
+        }
+        else if ($v1_end_date === FALSE && $v2_end_date !== FALSE) {
+          return 1;
+        }
+        else if ($v1_end_date !== FALSE && $v2_end_date != FALSE) {
+          return -1;
+        }
+        else {
+          if ($v1_end_date < $v2_end_date) {
+            return 1;
+          }
+          else if ($v1_end_date > $v2_end_date) {
+            return -1;
+          }
+          return 0;
+        }
+      }
+    });
+
+    $variables['purchased_plans'] = $sorted_purchased_plans;
+    $variables['was_plan_purchased'] = $was_plan_purchased;
+    drupal_add_library('system', 'ui.tabs');
+    drupal_add_js('jQuery(document).ready(function(){jQuery("#tabs").tabs();});', 'inline');
+
+    return theme('devconnect_monetization_catalogs_and_plans_list', $variables);
+  }
+  catch(\Apigee\Exceptions\ResponseException $re) {
+    drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    watchdog_exception('devconnect_monetization', $re, $error_info->message, array(), WATCHDOG_CRITICAL);
+  }
+  catch(\Exception $e) {
+    drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    watchdog_exception('devconnect_monetization', $e, $e->getMessage(), array(), WATCHDOG_CRITICAL);
+  }
+  return '';
+}
+
+function devconnect_monetization_package_getdetails ($username, $package_id, $rate_plan_id = NULL) {
+  $package_id = rawurldecode($package_id);
+  $rate_plan_id = is_null($rate_plan_id) ? NULL : rawurldecode($rate_plan_id);
+  try {
+    $developer_id = _devconnect_monetization_get_developer_id();
+    $client = devconnect_monetization_default_api_client();
+
+    // Initialize developer object
+    $developer = new Developer($client);
+    $developer->load($developer_id);
+
+    // If this variable is not null later in the flow, then it means
+    // that user has to complete previous requirements
+    $prevent_from_purchase_message = NULL;
+
+    if (count($developer->getAddresses()) == 0) {
+      $link = l('company settings', 'users/me/monetization/company/edit');
+      $prevent_from_purchase_message = t('You need to complete !link in order to purchase a plan.', array('!link' => $link));
+    }
+
+    // Retrieve developer accepted plans
+    $developer_rate_plan = new DeveloperRatePlan($developer_id, $client);
+    $developer_rate_plans = $developer_rate_plan->getList();
+
+    // Load monetization package
+    $monetization_package = new MonetizationPackage($client);
+    $monetization_package->load($package_id);
+
+    // Initialize the organization timezone
+    $org_timezone = new DateTimeZone($monetization_package->getOrganization()->getTimezone());
+
+    // UTC Time zone
+    $utc_timezone = new DateTimeZone('UTC');
+
+    // Initialize the organization current date and next day
+    $today = new DateTime('today', $utc_timezone);
+    $tomorrow = new DateTime('tomorrow', $utc_timezone);
+
+    // Hold the active rate plan id if any
+    $active_rate_plan_id = NULL;
+
+    // Hold the active rate plan name if any
+    $active_plan_name = NULL;
+
+    // Hold the dates for the purchase/end plan end forms
+    $plans_dates = array(
+      'can_purchase' => array(),
+      'can_end'      => array(),
+    );
+
+    /***************************************************************
+     * Hold the plans that are accepted and ended in the future    *
+     * so they can be accepted in the present time until developer *
+     * removes them from their purchased plans                     *
+     ***************************************************************/
+    $plans_accepted_and_ended_in_future = array();
+
+    /*************************************************************************
+     * Loop accepted rate plans for building the purchase/end plan forms     *
+     * also to detect the active plan id/name if any                         *
+     *************************************************************************/
+    foreach($developer_rate_plans as $developer_rate_plan) {
+
+      /***************************************************************************
+       * Skip plans that do not belong to to monetization package in question. *
+       ***************************************************************************/
+      if ($developer_rate_plan->getRatePlan()->getMonetizationPackage()->getId() != $package_id) {
+        continue;
+      }
+
+      /**********************************************************************************
+       * Convert time strings with org timezone to DateTime objects for friendly usage. *
+       **********************************************************************************/
+      $dev_rate_plan_start_date = DateTime::createFromFormat('Y-m-d H:i:s', $developer_rate_plan->getStartDate(), $utc_timezone);
+      $dev_rate_plan_end_date = DateTime::createFromFormat('Y-m-d H:i:s', $developer_rate_plan->getEndDate(), $utc_timezone);
+      $rate_plan_start_date = DateTime::createFromFormat('Y-m-d H:i:s', $developer_rate_plan->getRatePlan()->getStartDate(), $utc_timezone);
+      $rate_plan_end_date = DateTime::createFromFormat('Y-m-d H:i:s', $developer_rate_plan->getRatePlan()->getEndDate(), $utc_timezone);
+
+      /******************************************************************
+       * Test either this plan has ended before today or may end today. *
+       ******************************************************************/
+      if ($dev_rate_plan_end_date !== FALSE && $dev_rate_plan_end_date < $tomorrow) {
+
+        /********************************************************************
+         * Does this plan end today? If so then this plan will be available *
+         * for purchasing tomorrow or whenever the plan starts again.       *
+         *********************************************************************/
+        if ($dev_rate_plan_end_date >= $today) {
+
+          $plans_dates['can_purchase'][$developer_rate_plan->getRatePlan()->getId()] = array(
+            'available_since' => $tomorrow < $rate_plan_start_date ? $rate_plan_start_date : $tomorrow,
+            'available_until' => $rate_plan_end_date,
+          );
+
+         /*******************************************************************
+          * Since plan is active for today and no other plan has claimed    *
+          * to be active for today, then this is the active plan. It may be *
+          * replace as active plan if other plan starts today.              *
+          *******************************************************************/
+          if (is_null($active_rate_plan_id)) {
+            $active_rate_plan_id = $developer_rate_plan->getRatePlan()->getId();
+            $active_plan_name = $developer_rate_plan->getRatePlan()->getDisplayName();
+          }
+        }
+        /*****************************************************************************
+         * Since this plan ended before today then it is available for purchasing    *
+         * from at this moment or whenever the plan starts again.                    *
+         *****************************************************************************/
+        else {
+          $plans_dates['can_purchase'][$developer_rate_plan->getRatePlan()->getId()] = array(
+            'available_since' => $today < $rate_plan_start_date ? $rate_plan_start_date : $today,
+            'available_until' => $rate_plan_end_date,
+          );
+        }
+      }
+      /***********************************************************************
+       * Plan is still active now and in the future, therfore this plan      *
+       * can be ended at any time as long the end date is not ahead of date  *
+       * when the plan ends.                                                 *
+       ***********************************************************************/
+      else {
+        $plans_dates['can_end'][$developer_rate_plan->getRatePlan()->getId()] = array(
+          'can_end_since' => $today < $dev_rate_plan_start_date ? $dev_rate_plan_start_date : $today,
+          'can_end_until' => $rate_plan_end_date,
+        );
+        /******************************************************************************
+         * If plan has already started or starts today, then this is the active plan. *
+         * It also replaces any active plan that ends today.                          *
+         ******************************************************************************/
+        if ($dev_rate_plan_start_date >= $today) {
+          $active_rate_plan_id = $developer_rate_plan->getRatePlan()->getId();
+          $active_plan_name = $developer_rate_plan->getRatePlan()->getDisplayName();
+        }
+      }
+    }
+
+    /**********************************************************************
+     * Remove plans that are to be ended but still remain as purchasable  *
+     **********************************************************************/
+    foreach(array_keys($plans_dates['can_end']) as $can_end_plan_id) {
+      if (array_key_exists($can_end_plan_id, $plans_dates['can_purchase'])) {
+        unset($plans_dates['can_purchase'][$can_end_plan_id]);
+      }
+    }
+
+    /* Retrieve developer limits */
+    $limit = new Limit($client);
+    $limits = $limit->getDeveloperLimits($developer_id, $package_id, TRUE);
+    $dev_limits = array();
+    foreach($limits as $limit_item) {
+      /* Exclude those where developer=ALL */
+      if ($limit_item->getDeveloper() != 'ALL' && in_array($limit_item->getUserId(), array('ANY', 'ALL'))
+          && $limit_item->getHaltExecution() == TRUE
+      ) {
+        $dev_limits[] = $limit_item;
+      }
+    }
+    $limits = $dev_limits;
+
+    /* Get the products that monetization package includes */
+    $included_products = array();
+    foreach($monetization_package->getProducts() as $product) {
+      $included_products[$product->getId()] = $product->getDisplayName();
+    }
+
+    $sorted_limits = array();
+    $package_limits = '';
+    foreach($limits as $limit) {
+      /* Is limit a product level limit? */
+      if ($limit->isPublished() && array_key_exists($limit->getProduct(), $included_products)) {
+        $sorted_limits[$included_products[$limit->getProduct()]][] = $limit;
+      }
+      /****************************************************************************
+       * Else it may be a package level limit. If limit is implicit (quotaTyte is *
+       * either Balance or CreditLimt) then it is excluded. Values of this limits *
+       * are concatenated in $package_limits for later display.                   *
+       ****************************************************************************/
+      else if ($limit->isPublished() && $limit->getProduct() == 'ALL'
+          && ($limit->getQuotaType() != QuotaType::Balance && $limit->getQuotaType() != QuotaType::CreditLimit)
+      ) {
+        $package_limits .= _devconnect_monetization_build_limit_text($limit) . '<br>';
+      }
+    }
+
+    /* Sort the limits by product name ASC */
+    ksort($sorted_limits);
+
+    $rate_plan = new RatePlan($package_id, $client);
+    $rate_plan->setDeveloper($developer);
+
+    // Get current rate plans
+    $rate_plans = $rate_plan->getList(0, 0);
+
+    /****************************************************************************************
+     * Get current rate plans plus future rate plans. Notice that parent plan is            *
+     * actually the current plan therefore the plan we get from the list is the future one. *
+     * To make things easier and understandable in the list the parent rate plan replaces   *
+     * the plan in the list and future plan is accessed as the child plan. A little bit     *
+     * tricky even to explain.                                                              *
+     ****************************************************************************************/
+    $all_rate_plans = $rate_plan->getList(0, 0, false, true);
+
+    /* Loop rate plans to find out which ones have future plans */
+    for($i = 0, $len = count($rate_plans); $i < $len; $i++) {
+      $rate_plan_item = $rate_plans[$i];
+
+      // Assigned the rate plans for future plans
+      foreach ($all_rate_plans as $all_rate_plan_item) {
+        if ($all_rate_plan_item->getParentRatePlan() != NULL
+            && $rate_plan_item->getId() == $all_rate_plan_item->getParentRatePlan()->getId()
+        ) {
+          $rate_plans[$i] = $all_rate_plan_item->getParentRatePlan();
+          break;
+        }
+      }
+
+      /**********************************************************************************
+       * Replace plan in the list for parent rate plan. The replaced plan will be later *
+       * accessed by parent rate plan ->getChildRatePlan()                              *
+       **********************************************************************************/
+      $rate_plan_item = $rate_plans[$i];
+
+      /***************************************************************************
+       * Assigned the minimun and maximun purchasing dates for the remaing plans *
+       * that are not accepted by the developer                                  *
+       ***************************************************************************/
+      if (!array_key_exists($rate_plan_item->getId(), $plans_dates['can_end'])
+          && !array_key_exists($rate_plan_item->getId(), $plans_dates['can_purchase'])
+      ) {
+        $start_date = DateTime::createFromFormat('Y-m-d H:i:s', $rate_plan_item->getStartDate(), $utc_timezone);
+        $plans_dates['can_purchase'][$rate_plan_item->getId()] = array(
+          'available_since' => $start_date > $today ? $start_date : $today,
+          'available_until' => DateTime::createFromFormat('Y-m-d H:i:s', $rate_plan_item->getEndDate(), $utc_timezone),
+        );
+      }
+    }
+
+    /* No need to explain */
+    if (count($rate_plans) == 0) {
+      return t('No plans were found for package <strong>' . $monetization_package->getDisplayName() . ' </strong>');
+    }
+
+    /***************************************************************************
+     * See if user has accepted TnCs only if user has already captured company *
+     * profile info. Otherwise TnCs validation is not reached out.             *
+     ***************************************************************************/
+    if (!isset($prevent_from_purchase_message)) {
+      /**************************************************************************
+       * Find out if a user has accepted the latest TnCs. Users needs to accept *
+       * the latest TnCs in order to able to purchase a plan.                   *
+       **************************************************************************/
+      $dev_tncs = new TermAndCondition($client);
+      $has_accepted_tncs = $dev_tncs->isAbleToPurchase($developer_id);
+      if (!$has_accepted_tncs) {
+        $link = l('Terms and Conditions', 'users/me/monetization/company/edit', array('fragment' => 'tab3'));
+        $prevent_from_purchase_message = t('You must accept !link before purchasing a plan.', array('!link' => $link));
+      }
+    }
+
+    /* Set template variables */
+    $variables = array();
+    $variables['package'] = $monetization_package;
+    $variables['limits'] = $sorted_limits;
+    $variables['product_list'] = array();
+    $variables['active_rate_plan_id'] = $active_rate_plan_id;
+    $variables['active_plan_name'] = $active_plan_name;
+    $variables['has_many_products'] = count($monetization_package->getProducts()) > 1;
+    $variables['package_limits'] = strlen($package_limits) > 0 ? $package_limits : NULL;
+    $variables['prevent_from_purchase_message'] = $prevent_from_purchase_message;
+    $variables['has_many_rate_plans'] = count($rate_plans) > 1;
+    $variables['rate_plans'] = $rate_plans;
+    $variables['plans_dates'] = $plans_dates;
+    $variables['plans_accepted_and_ended_in_future'] = $plans_accepted_and_ended_in_future;
+    if (count($rate_plans) > 1) {
+      $variables['active_tab'] = isset($_POST['plan_id']) ? $_POST['plan_id'] : isset($rate_plan_id) ? $rate_plan_id : TRUE;
+    }
+
+    /**
+     * Get products that this monetization package includes.
+     */
+    foreach ($monetization_package->getProducts() as $product) {
+      $variables['product_list'][] = $product->getDisplayName();
+    }
+    $variables['product_list'] = implode(', ', $variables['product_list']);
+
+    drupal_set_title(t('Package Details: @package', array('@package' => $monetization_package->getDisplayName())));
+
+    /**
+     * Include the JavaScript to work with the tabs logic.
+     */
+    if ($variables['has_many_rate_plans']) {
+      drupal_add_js('jQuery(function($){$(".tabbable .nav-tabs a[data-toggle=\'tab\']").on("shown", function (e){$("input[name=plan_id]").each(function(){$(this).val($(e.target).next("input").val())});})});', 'inline');
+      drupal_add_js('jQuery(function($){$("input[name=plan_id]").each(function(){$(this).val($(".tabbable").find(".nav-tabs:first").find("li.active input").val())});});', 'inline');
+    }
+
+    /**
+     * Add the inline JavaScript to restrict the purchase/end dates when there are more than one plan
+     */
+    drupal_add_library('system', 'ui.datepicker');
+    if ($variables['has_many_rate_plans']) {
+      $variables['plans_dates'] = $plans_dates;
+      foreach ($plans_dates['can_purchase'] as $id => $plan_date) {
+        $js = _devconnect_monetization_build_date_widget($plan_date, $org_timezone, $id);
+        drupal_add_js($js, 'inline');
+      }
+      foreach ($plans_dates['can_end'] as $id => $plan_date) {
+        $js = _devconnect_monetization_build_date_widget($plan_date, $org_timezone, $id);
+        drupal_add_js($js, 'inline');
+      }
+    }
+    /**
+     * Else add inline JavaScript for product specific package
+     */
+    else {
+      $plan_date = count($plans_dates['can_purchase']) > 0 ? $plans_dates['can_purchase'] : $plans_dates['can_end'];
+      foreach ($plan_date as $date_limits) {
+        $js = _devconnect_monetization_build_date_widget($date_limits, $org_timezone);
+        drupal_add_js($js, 'inline');
+      }
+    }
+
+    /***************************************************************************
+     * If the developer attempted to purchase a plan with insuffient funds     *
+     * then include the top up form and ask the developer to top up balance.   *
+     ***************************************************************************/
+    $currency_to_top_up = NULL;
+    $currs = NULL;
+    /************************************************************************
+     * if $_REQUEST['topup'] is set then indicates the developer previously *
+     * attempted to purchase a plan with insuffient founds.                 *
+     ************************************************************************/
+    $variables['prompt_top_up_balance'] = isset($_REQUEST['topup']) && strlen($_REQUEST['topup']) ? $_REQUEST['topup'] : NULL;
+    if (!is_null($variables['prompt_top_up_balance'])) {
+      $org = new Organization($client);
+      $currs = $org->listSupportedCurrencies();
+      foreach ($currs as $currency) {
+        /* User is to ask to top up balance in the currency specified by $variables['prompt_top_up_balance'] */
+        if ($currency->name == $variables['prompt_top_up_balance']) {
+          $currency_to_top_up = $currency->name;
+          break;
+        }
+      }
+    }
+
+    /* Add more template variables */
+    $variables['currencies'] = $currs;
+    $variables['currency_to_top_up'] = $currency_to_top_up;
+
+    /* Include top up balance form and required JavaScript */
+    if ($variables['prompt_top_up_balance']) {
+      $variables['prompt_top_up_balance_currency'] = $_REQUEST['prompt_top_up_balance_currency'];
+      drupal_add_js(drupal_get_path('module', 'devconnect_monetization') . '/js/purchase_plan_top_up.js', 'file');
+
+      module_load_include('inc', 'devconnect_monetization', 'devconnect_monetization.billing');
+      drupal_load('file', drupal_get_path('module', 'devconnect_monetization') . '/devconnect_monetization.billing.inc');
+      $topup_form = drupal_get_form('devconnect_monetization_top_up_balance_form');
+      $forms = array(
+          'top_up_form' => drupal_render($topup_form),
+      );
+      $variables['forms'] = $forms;
+      $current_balance = 0;
+      $balances = $developer->getPrepaidBalance();
+      foreach ($balances as $balance) {
+        if ($balance->supportedCurrency->name == $currency_to_top_up) {
+          $current_balance = $balance->currentBalance;
+          break;
+        }
+      }
+      drupal_add_js('jQuery(function($){topUpBalance("", ' . sprintf('%.2f', $current_balance) . ', "' . $variables['prompt_top_up_balance'] . '");});', 'inline');
+    }
+    /* End of if developer attempted to purchase a plan with insuficient funds */
+
+    return theme('devconnect_monetization_package_details', $variables);
+  }
+  catch(\Apigee\Exceptions\ResponseException $re) {
+    drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    watchdog_exception('devconnect_monetization', $re, $error_info->message, array(), WATCHDOG_CRITICAL);
+  }
+  catch(\Exception $e) {
+    drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    watchdog_exception('devconnect_monetization', $e, $e->getMessage(), array(), WATCHDOG_CRITICAL);
+  }
+  return '';
+}
+
+function _devconnect_monetization_build_date_widget($plan_date,  $org_timezone, $plan_id = NULL) {
+
+  $minKey = array_key_exists('available_since', $plan_date) ? 'available_since' : 'can_end_since';
+  $maxKey = array_key_exists('available_until', $plan_date) ? 'available_until' : 'can_end_until';
+  $max_date = ' ';
+  if (FALSE && $plan_date[$maxKey] !== FALSE) {
+    $max_date = sprintf(', maxDate: new Date(%s) ',
+        $plan_date[$maxKey]->setTimezone($org_timezone)->format('Y, m-1, d'));
+  }
+  $range = sprintf('{ minDate: new Date(%s)%s}',
+      $plan_date[$minKey]->setTimezone($org_timezone)->format('Y, m-1, d'),
+      $max_date
+  );
+
+  if ($plan_id != NULL) {
+    $dom_id = '#tab_' . preg_replace('/[^a-z0-9_-]/i', '_', $plan_id);
+    $js = 'jQuery(function($){$("' . $dom_id . ' .date").datepicker(' . $range . ');});';
+  }
+  else {
+    $js = 'jQuery(function($){$(".date").datepicker(' . $range . ');});';
+  }
+  return $js;
+}
+
+/**
+ * Implements hook_theme()
+ */
+function devconnect_monetization_theme ($existing, $type, $theme, $path) {
+  $items = array();
+  $template_path = drupal_get_path('module', 'devconnect_monetization') . '/templates';
+
+  $items['devconnect_monetization_catalogs_and_plans_list'] = array(
+    'template'  => 'catalog-and-plans',
+    'arguments' => array('application_count' => 0, 'applications' => '', 'user' => NULL),
+    'path'      => $template_path
+  );
+
+  $items['devconnect_monetization_package_details'] = array(
+    'template'  => 'catalog-package',
+    'arguments' => array('application_count' => 0, 'applications' => '', 'user' => NULL),
+    'path'      => $template_path
+  );
+
+  $items['devconnect_monetization_billing'] = array(
+    'template'  => 'billing',
+    'arguments' => array('application_count' => 0, 'applications' => '', 'user' => NULL),
+    'path'      => $template_path
+  );
+
+  $items['devconnect_monetization_prepaid_balance'] = array(
+    'template'  => 'prepaid-balance',
+    'arguments' => array('application_count' => 0, 'applications' => '', 'user' => NULL),
+    'path'      => $template_path
+  );
+
+  $items['devconnect_monetization_company_profile'] = array(
+    'template'  => 'company-profile',
+    'arguments' => array('application_count' => 0, 'applications' => '', 'user' => NULL),
+    'path'      => $template_path
+  );
+  $items['devconnect_monetization_product_detail'] = array(
+    'template'  => 'product-detail',
+    'arguments' => array('application_count' => 0, 'applications' => '', 'user' => NULL),
+    'path'      => $template_path
+  );
+  $items['devconnect_monetization_reports'] = array(
+    'template'  => 'reports',
+    'arguments' => array('application_count' => 0, 'applications' => '', 'user' => NULL),
+    'path'      => $template_path
+  );
+  $items['insuffient_funds_top_up_balance'] = array(
+    'template'  => 'insuffient_funds_top_up_balance',
+    'arguments' => array('application_count' => 0, 'applications' => '', 'user' => NULL),
+    'path'      => $template_path
+  );
+  $items['devconnect_monetization_developer_report_form'] = array(
+    'template' => 'developer-report-form',
+    'render element' => 'form',
+    'path'      => $template_path,
+  );
+  $items['devconnect_monetization_roles_form'] = array(
+    'render element' => 'form',
+  );
+  return $items;
+}
+
+/**
+ * Build the proper text to be displayed as limit.
+ *
+ * @param \Apigee\Commerce\Limit $product_limit
+ * @param string $pricing_type
+ * @return string
+ */
+function _devconnect_monetization_build_limit_text(Limit $product_limit, $pricing_type) {
+  $limit_text = $product_limit->getQuotaLimit();
+  if ($product_limit->getQuotaType() == QuotaType::SpendLimit && strlen($pricing_type) > 0) {
+    $limit_text .= ' (' . strtolower($pricing_type) . ') ';
+  }
+  switch ($product_limit->getQuotaType()) {
+    case QuotaType::CreditLimit: $limit_text .= ' credit limit '; break;
+    case QuotaType::SpendLimit: $limit_text .= ' spend limit '; break;
+    case QuotaType::FeeExposure:  $limit_text .= ' total charge '; break;
+    case QuotaType::Transactions : $limit_text .= ' transactions '; break;
+    case QuotaType::SpendLimit : $limit_text .= ' payment '; break;
+    case QuotaType::Balance : $limit_text .= ' balance '; break;
+  }
+  if (in_array($product_limit->getApplication(), array('ANY', 'ALL'))) {
+    $limit_text .= $product_limit->getApplication() == 'ANY' ? ' per application' : ' all applications';
+  }
+  else if ($product_limit->getApplication() != NULL) {
+    $developer_id = _devconnect_monetization_get_developer_id();
+    $client = devconnect_monetization_default_api_client();
+    $app = new DeveloperApp($client, $developer_id);
+    $apps = $app->getListDetail($developer_id);
+    foreach ($apps as $app) {
+      if ($app->getAppId() == $product_limit->getApplication()) {
+        $limit_text .= ' for ' . $app->getName();
+      }
+    }
+  }
+  //if ($product_limit->getDeveloper() != NULL) {
+  //  $limit_text .= ' per developer';
+  //}
+  //if ($product_limit->getDeveloperBillingType() == 'ANY') {
+  //  $limit_text .= ' per developerBillingType';
+  //}
+  if ($product_limit->getDeveloperCategory() == 'ANY') {
+    $limit_text .= ' per developer category';
+  }
+  if (!in_array($product_limit->getDurationType(), array('ANY', 'ALL'))) {
+    $limit_text .= ' per ' . strtolower($product_limit->getDurationType());
+  }
+  if ($product_limit->getMonetizationPackage() == 'ANY') {
+    $limit_text .= ' per monetization package';
+  }
+  if ($product_limit->getProduct() == 'ANY') {
+    $limit_text .= ' per product';
+  }
+  if ($product_limit->getSubOrganization() == 'ANY') {
+    $limit_text .= ' per sub organization';
+  }
+  if ($product_limit->getUserId() == 'ANY') {
+    $limit_text .= ' per user';
+  }
+  if ($product_limit->getQuotaType() == QuotaType::SpendLimit) {
+    $limit_text = $product_limit->getCurrency() . ' ' . $limit_text;
+  }
+  else if ($product_limit->getQuotaType() == QuotaType::FeeExposure) {
+    $limit_text = $product_limit->getCurrency() . ' ' . $limit_text;
+  }
+  return $limit_text;
+}
+
+function _devconnect_monetization_sort_rate_plan_rates($rate_plan_rates, $merge = FALSE) {
+  $rate_values = array();
+  $rate_types = array();
+  foreach ($rate_plan_rates as $rate_plan_rate) {
+    if ($merge) {
+      $rate_values[$rate_plan_rate->type][$rate_plan_rate->startUnit] = $rate_plan_rate;
+      if (!in_array($rate_plan_rate->type, $rate_types)) {
+        $rate_types[] = $rate_plan_rate->type;
+      }
+    }
+    else {
+      $rate_values[$rate_plan_rate->startUnit] = $rate_plan_rate;
+    }
+  }
+  if ($merge) {
+    foreach ($rate_types as $rate_type) {
+      ksort($rate_values[$rate_type]);
+    }
+  }
+  else {
+    ksort($rate_values);
+  }
+  return $rate_values;
+}
+
+/**
+ * Return the proper text to be displayed depending on variable $metering_type
+ *
+ * @param \Apigee\Commerce\DataStructures\RatePlanDetail $rate_plan_detail
+ * @return string
+ */
+function _devconnect_monetization_get_rate_card($rate_plan_detail) {
+  if (in_array($rate_plan_detail->ratingParameter, array(MeteringType::VOLUME, 'user'))) {
+    $rate_card = NULL;
+    switch ($rate_plan_detail->meteringType) {
+      case MeteringType::UNIT:
+        $rate_card = ' per transaction';
+        break;
+      case MeteringType::VOLUME:
+      case MeteringType::STAIR_STEP:
+        $rate_card = ' Volume of transactions';
+        break;
+      default:
+      //@TODO Should throw exception?
+    }
+  }
+  else {
+    $rate_card = $rate_plan_detail->ratingParameter . ' in ' . $rate_plan_detail->ratingParameterUnit;
+  }
+  return $rate_card;
+}
+
+/**
+ *
+ * @param \Apigee\Commerce\RatePlan $rate_plan
+ * @param Apigee\Commerce\DataStructures\RatePlanDetail $rate_plan_detail
+ */
+function _devconnect_monetization_get_frequency_fee_text($rate_plan, $rate_plan_detail) {
+  if ($rate_plan->getRecurringFee() > 0) {
+    $text = $rate_plan->getCurrency()->name . '&nbsp;' . $rate_plan->getRecurringFee();
+    if ($rate_plan->getFrequencyDuration() > 1) {
+      $text .= ' every ' . $rate_plan->getFrequencyDuration() . ' ' . strtolower($rate_plan->getFrequencyDurationType()) . 's';
+    }
+    else {
+      $text .= ' per ' . strtolower($rate_plan->getFrequencyDurationType());
+    }
+    $extra = array();
+    if ($rate_plan->isProrate()) {
+      $extra[] = 'pro-rated';
+    }
+    $extra[] = $rate_plan->isAdvance() ? 'in advance' : 'in arrears';
+    $text .= '&nbsp;(' . implode(', ', $extra) . ')';
+    return $text;
+  }
+  else {
+    return '--';
+  }
+}
+
+
+/**
+ *
+ * @param Apigee\Commerce\DataStructures\RatePlan $rate_plan
+ */
+function _devconnect_monetization_get_free_quantity_text_for_rate_plan_level($rate_plan) {
+  if ($rate_plan->getFreemiumUnit() == 0 && $rate_plan->getFreemiumDuration() == 0) {
+    return NULL;
+  }
+  $text = '';
+  if ($rate_plan->getFreemiumUnit() > 0) {
+    $text = 'up to ' . $rate_plan->getFreemiumUnit() . ' transactions ';
+  }
+  else {
+    $text = 'Unlimited ';
+  }
+  if ($rate_plan->getFreemiumDuration() > 0) {
+    $text .= strlen($text) > 0 ? ' for the first ' : ' first ';
+    $time_type = strtolower($rate_plan->getFreemiumDurationType());
+    $text .= $rate_plan->getFreemiumDuration() > 1 ? $rate_plan->getFreemiumDuration() . ' ' . strtolower($time_type) . 's' : $time_type;
+  }
+  return strlen($text) > 0 ? $text : NULL;
+}
+
+/**
+ *
+ * @param Apigee\Commerce\DataStructures\RatePlanDetail $rate_plan_detail
+ */
+function _devconnect_monetization_get_free_quantity_text($rate_plan_detail) {
+  if ($rate_plan_detail->freemiumUnit == 0 && $rate_plan_detail->freemiumDuration == 0) {
+    return NULL;
+  }
+  $text = '';
+  if ($rate_plan_detail->freemiumUnit > 0) {
+    $unit_type = in_array($rate_plan_detail->ratingParameter, array(MeteringType::VOLUME, 'user')) ? ' transactions ' : $rate_plan_detail->ratingParameterUnit;
+    $text = 'up to ' . $rate_plan_detail->freemiumUnit . ' ' . $unit_type;
+  }
+  else {
+    $text = 'Unlimited ';
+  }
+  if ($rate_plan_detail->freemiumDuration > 0) {
+    $text .= strlen($text) > 0 ? ' for the first ' : ' first ';
+    $time_type = strtolower($rate_plan_detail->freemiumDurationType);
+    $text .= $rate_plan_detail->freemiumDuration > 1 ? $rate_plan_detail->freemiumDuration . ' ' . strtolower($time_type) . 's' : $time_type;
+  }
+  return strlen($text) > 0 ? $text : NULL;
+}
+
+function _devconnect_monetization_purchase_plan_form($form, &$form_state) {
+  $rate_plan = $form_state['build_info']['args'][0];
+  $multiple_plans = $form_state['build_info']['args'][1];
+  $form['plan_id'] = array(
+    '#type' => 'hidden',
+  );
+
+  $form['#package_id'] = $rate_plan->getMonetizationPackage()->getId();
+
+  $form['form_title'] = array(
+    '#markup' => t('<h3>Purchase ' . $rate_plan->getName() . '</h3>'),
+  );
+  $form['form_description'] = array(
+    '#markup' => t('<p>Any API products contained within this package will be available after the start date of your plan.</p><br>'),
+  );
+  $form['form_instruction'] = array(
+    '#markup' => t('<strong>Select a start date for this plan</strong><br>'),
+  );
+  $form['start_date'] = array(
+    '#title_display' => 'invisible',
+    '#type' => 'textfield',
+    '#date_format' => 'j F Y',
+    '#attributes' => array(
+        'size' => 40,
+        'class' => array('date'),
+    ),
+    '#required' => TRUE,
+    '#default_value' => t('Select a start date...'),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Purchase This Plan'),
+  );
+
+  if (!$multiple_plans) {
+    $form['plan_id']['#value'] = $rate_plan->getId();
+  }
+
+  $form['#validate'][] = '_devconnect_monetization_purchase_plan_form_validate';
+  $form['#submit'][] = '_devconnect_monetization_purchase_plan_form_submit';
+
+  return $form;
+}
+
+function _devconnect_monetization_purchase_plan_form_validate(&$form, &$form_state) {
+  $developer_id = _devconnect_monetization_get_developer_id();
+  $start_date = strtotime($form_state['values']['start_date']);
+  if ($start_date === FALSE) {
+    form_set_error('start_date', 'Invalid or blank start date. Please select a start date for this plan.');
+    return;
+  }
+}
+
+function _devconnect_monetization_purchase_plan_form_submit(&$form, &$form_state) {
+  $developer_id = _devconnect_monetization_get_developer_id();
+  $client = devconnect_monetization_default_api_client();
+  $developer_rate_plan = new DeveloperRatePlan($developer_id, $client);
+  $rate_plan = new RatePlan($form['#package_id'], $client);
+  $rate_plan->load($form_state['values']['plan_id']);
+  $developer_rate_plan->setRatePlan($rate_plan);
+
+  $dev_plan_id = NULL;
+  $devs_plans = $developer_rate_plan->getList();
+  foreach ($devs_plans as $dev_plan) {
+    if ($dev_plan->getRatePlan()->getId() == $rate_plan->getId()) {
+      $dev_plan_id = $dev_plan->getId();
+      break;
+    }
+  }
+
+  $org_timezone = new DateTimeZone($rate_plan->getOrganization()->getTimezone());
+  $utc_timezone = new DateTimeZone('UTC');
+  $separator = strpos($form_state['values']['start_date'], '/') > 0 ? '/' : '-';
+  $start_date = DateTime::createFromFormat("m{$separator}d{$separator}Y", $form_state['values']['start_date'], $org_timezone);
+  $start_date->setTimezone($utc_timezone);
+  $developer_rate_plan->setId($dev_plan_id);
+  $developer_rate_plan->setStartDate($start_date->format('Y-m-d H:i:s'));
+  try {
+    $developer_rate_plan->save('create');
+    drupal_set_message($rate_plan->getMonetizationPackage()->getDisplayName() . ', ' . $rate_plan->getDisplayName()  . ' has been purchased.', 'status');
+    $form_state['rebuild'] = FALSE;
+    $form_state['redirect'] = 'users/me/monetization/packages';
+  }
+  catch(\Apigee\Exceptions\ResponseException $re) {
+    drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    watchdog_exception('devconnect_monetization', $re, $error_info->message, array(), WATCHDOG_CRITICAL);
+  }
+  catch (CommerceApiException $ce) {
+    // If overlaps any rate plan, redirect to confirm override
+    if ($ce->getCommerceCode() == CommerceApiException::DEVELOPER_HAS_FOLLOWING_OVERLAP_RATE_PLANS) {
+      $confirm_url =  sprintf('users/me/monetization/packages/%s/rate-plans/%s/dev-rate-plans/%s/%s',
+                        rawurlencode($form['#package_id']),
+                        rawurlencode($rate_plan->getId()),
+                        rawurlencode($dev_plan_id),
+                        rawurlencode($form_state['values']['start_date'])
+                      );
+
+      drupal_goto($confirm_url);
+    }
+    else if ($ce->getCommerceCode() == CommerceApiException::INSUFFICIENT_FUNDS
+        || $ce->getCommerceCode() == CommerceApiException::PREPAID_DEVELOPER_HAS_NO_BALANCE
+    ){
+      drupal_goto('users/me/monetization/packages/' . rawurlencode($form['#package_id']), array('query' => array('topup' => $rate_plan->getCurrency()->name)));
+      return;
+    }
+    drupal_set_message($ce->getCommerceCode());
+    $message = $ce->getCommerceMessage();
+    if ($message !== NULL) {
+      drupal_set_message($message, 'error');
+    }
+    else {
+      drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    }
+    if ($GLOBALS['devconnect_monetization_debug_endpoint_response']) {
+      drupal_set_message('DEBUG: ' . $ce->getCommerceMessage(TRUE), 'warning');
+    }
+    watchdog_exception('devconnect_monetization', $ce->getPrevious(), $ce->getCode(), array(), WATCHDOG_CRITICAL);
+  }
+  catch(\Exception $e) {
+    drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    watchdog_exception('devconnect_monetization', $e, $e->getMessage(), array(), WATCHDOG_CRITICAL);
+  }
+}
+
+function devconnect_monetization_extract_products_from_rate_plan(RatePlan $rate_plan) {
+
+  $producs = array();
+
+  // Not product specific
+  if (count($rate_plan->getRatePlanDetails()) > 0) {
+    foreach($rate_plan->getRatePlanDetails() as $rate_plan_detail) {
+      if (isset($rate_plan_detail->product)) {
+        $products[$rate_plan_detail->product->getId()] = $rate_plan_detail->product;
+      }
+    }
+  }
+  if (count($products) == 0) {
+    foreach ($rate_plan->getMonetizationPackage()->getProducts() as $product) {
+      $products[$product->getId()] = $product;
+    }
+  }
+  return $products;
+}
+
+function devconnect_monetization_overlap_plan_form($form, &$form_state, $user, $package_id, $rate_plan_id, $dev_rate_plan_id, $start_date) {
+  $developer_id = _devconnect_monetization_get_developer_id();
+  $client = devconnect_monetization_default_api_client();
+
+  // Undecode URL path segments
+  $package_id = rawurldecode($package_id);
+  $rate_plan_id = rawurldecode($rate_plan_id);
+  $dev_rate_plan_id = rawurldecode($dev_rate_plan_id);
+  $start_date = rawurldecode($start_date);
+
+  $developer_rate_plan = new DeveloperRatePlan($developer_id, $client);
+  $rate_plan = new RatePlan($package_id, $client);
+  $rate_plan->load($rate_plan_id);
+  $developer_rate_plan->setRatePlan($rate_plan);
+  $developer_rate_plan->setId($dev_rate_plan_id);
+  $separator = strpos($start_date, '/') > 0 ? '/' : '-';
+
+  $utc_timezone = new DateTimeZone('UTC');
+  $org_timezone = new DateTimeZone($rate_plan->getOrganization()->getTimezone());
+  $shiftted_start_date = DateTime::createFromFormat("m{$separator}d{$separator}Y", $start_date, $org_timezone);
+  $shiftted_start_date->setTimezone($utc_timezone);
+  $developer_rate_plan->setStartDate($shiftted_start_date->format('Y-m-d H:i:s'));
+  $form= array();
+  try {
+    $developer_rate_plan->save('create');
+    drupal_set_message($rate_plan->getMonetizationPackage()->getDisplayName() . ', ' . $rate_plan->getDisplayName()  . ' has been purchased.', 'status');
+    $form_state['rebuild'] = FALSE;
+    $form_state['redirect'] = 'users/me/monetization/packages';
+  }
+  catch (CommerceApiException $cae) {
+    if ($cae->getCommerceCode() == CommerceApiException::DEVELOPER_HAS_FOLLOWING_OVERLAP_RATE_PLANS) {
+      $commerce_message = $cae->getCommerceMessage();
+      $overlaps = json_decode(substr($commerce_message, strpos($commerce_message,'=')+1), TRUE);
+
+      // Remove prefix xxx@ from product ids
+      $overlaps = array_map(function($products){
+        $values = array();
+        foreach ($products as $product_id => $product_name) {
+          $values[substr($product_id, strrpos($product_id, '@')+1)] = $product_name;
+        }
+        return $values;
+      }, $overlaps);
+
+      // Process products in attempted purchased plan
+      $products = devconnect_monetization_extract_products_from_rate_plan($rate_plan);
+
+      $overlappings = array();
+      foreach ($overlaps as $plan_id => $overlapping_products) {
+        $overlappings[$plan_id] = array(
+          'will-include' => array_diff_key($products, $overlapping_products),
+          'will-exclude' => array_diff_key($overlapping_products, $products),
+          'conflicting'  => array_intersect_key($products, $overlapping_products),
+        );
+      }
+
+      $conflicts = '<ul>';
+      foreach ($overlappings as $plan => $products) {
+        list($plan_id, $plan_name) = explode('|', $plan);
+        $conflicts .= '<li><h3>' . $plan_name . '</h3>';
+
+        if (count($products['will-include']) > 0) {
+          $conflicts .= '<h4>Additional products:</h4><ul>';
+          foreach ($products['will-include'] as $product) {
+            $product_name = is_object($product) ? $product->getDisplayName() : $product;
+            $conflicts .= '<li>' . $product_name . '</li>';
+          }
+          $conflicts .= '</ul><br>';
+        }
+
+        if (count($products['will-exclude']) > 0) {
+          $conflicts .= '<h4>Excluded products:</h4><ul>';
+          foreach ($products['will-exclude'] as $product) {
+            $product_name = is_object($product) ? $product->getDisplayName() : $product;
+            $conflicts .= '<li>' . $product_name . '</li>';
+          }
+          $conflicts .= '</ul><br>';
+        }
+
+        if (count($products['conflicting']) > 0) {
+          $conflicts .= '<h4>Conflicting products:</h4><ul>';
+          foreach ($products['conflicting'] as $product) {
+            $product_name = is_object($product) ? $product->getDisplayName() : $product;
+            $conflicts .= '<li>' . $product_name . '</li>';
+          }
+          $conflicts .= '</ul><br>';
+        }
+
+        $conflicts .= '</li>';
+      }
+      $conflicts .= '</ul>';
+
+      $form['package_id'] = array(
+        '#type' => 'hidden',
+        '#value' => $package_id,
+      );
+      $form['rate_plan_id'] = array(
+        '#type' => 'hidden',
+        '#value' => $rate_plan_id,
+      );
+      $form['dev_rate_plan_id'] = array(
+        '#type' => 'hidden',
+        '#value' => $dev_rate_plan_id,
+      );
+      $form['start_date'] = array(
+        '#type' => 'hidden',
+        '#value' => $start_date
+      );
+      $form['#submit'][] = '_devconnect_monetization_overlap_plan_form_submit';
+
+      $desc = 'The plans below share some common products with the plan you are trying to purchase. However if you continue to purchase then these plans will be replaced by the plan you are about to purchase.<br />';
+      // Tell the submit handler to process the form
+      // Make sure the form redirects in the end
+      $form['destination'] = array('#type' => 'hidden', '#value' => 'users/me/monetization/packages/' . rawurlencode($package_id));
+
+      return confirm_form($form,
+          sprintf('Plan "%s" conflicts with others', $rate_plan->getDisplayName()),
+          'users/me/monetization/packages/' . rawurlencode($package_id),
+          $desc . $conflicts,
+          'Purchase',
+          'Cancel');
+    }
+    else {
+      drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    }
+  }
+  catch (Exception $e) {
+    drupal_goto('users/me/monetization/packages');
+    watchdog_exception('devconnect_monetization', $e, $e->getCode(), array(), WATCHDOG_CRITICAL);
+  }
+
+  return $form;
+}
+
+function _devconnect_monetization_overlap_plan_form_submit(&$form, &$form_state) {
+  $developer_id = _devconnect_monetization_get_developer_id();
+
+  $package_id = $form_state['values']['package_id'];
+  $rate_plan_id = $form_state['values']['rate_plan_id'];
+  $dev_rate_plan_id = $form_state['values']['dev_rate_plan_id'];
+
+  $client = devconnect_monetization_default_api_client();
+  $developer_rate_plan = new DeveloperRatePlan($developer_id, $client);
+  $rate_plan = new RatePlan($package_id, $client);
+  $rate_plan->load($rate_plan_id);
+  $developer_rate_plan->setRatePlan($rate_plan);
+
+  $org_timezone = new DateTimeZone($rate_plan->getOrganization()->getTimezone());
+  $utc_timezone = new DateTimeZone('UTC');
+  $separator = strpos($form_state['values']['start_date'], '/') > 0 ? '/' : '-';
+  $start_date = DateTime::createFromFormat("m{$separator}d{$separator}Y", $form_state['values']['start_date'], $org_timezone);
+  $start_date->setTimezone($utc_timezone);
+  $developer_rate_plan->setId($dev_rate_plan_id);
+  $developer_rate_plan->setStartDate($start_date->format('Y-m-d H:i:s'));
+  try {
+    $developer_rate_plan->force_save();
+    drupal_set_message($rate_plan->getMonetizationPackage()->getDisplayName() . ', ' . $rate_plan->getDisplayName()  . ' has been purchased.', 'status');
+    $form_state['rebuild'] = FALSE;
+    $form_state['redirect'] = 'users/me/monetization/packages';
+  }
+  catch(\Apigee\Exceptions\ResponseException $re) {
+    drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    watchdog_exception('devconnect_monetization', $re, $error_info->message, array(), WATCHDOG_CRITICAL);
+    if ($GLOBALS['devconnect_monetization_debug_endpoint_response']) {
+      drupal_set_message('DEBUG: ' . $re->getMessage(), 'warning');
+    }
+  }
+  catch (CommerceApiException $ce) {
+    if ($ce->getCommerceCode() == CommerceApiException::INSUFFICIENT_FUNDS
+        || $ce->getCommerceCode() == CommerceApiException::PREPAID_DEVELOPER_HAS_NO_BALANCE
+    ) {
+      drupal_goto('users/me/monetization/packages/' . rawurlencode($rate_plan->getMonetizationPackage()->getId()), array('query' => array('topup' => $rate_plan->getCurrency()->name)));
+      return;
+    }
+    $message = $ce->getCommerceMessage();
+    if ($message !== NULL) {
+      drupal_set_message($message, 'error');
+    }
+    else {
+      drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    }
+    if ($GLOBALS['devconnect_monetization_debug_endpoint_response']) {
+      drupal_set_message('DEBUG: ' . $ce->getCommerceMessage(TRUE), 'warning');
+    }
+    watchdog_exception('devconnect_monetization', $ce->getPrevious(), $ce->getCode(), array(), WATCHDOG_CRITICAL);
+  }
+  catch(\Exception $e) {
+    drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    watchdog_exception('devconnect_monetization', $e, $e->getMessage(), array(), WATCHDOG_CRITICAL);
+  }
+}
+
+function _devconnect_monetization_end_plan_form($form, $form_state) {
+  $rate_plan = $form_state['build_info']['args'][0];
+  $multiple_plans = $form_state['build_info']['args'][1];
+  $form['plan_id'] = array(
+      '#type' => 'hidden',
+  );
+
+  $form['#package_id'] = $rate_plan->getMonetizationPackage()->getId();
+
+  $form['form_title'] = array(
+      '#markup' => t('<h3>End ' . $rate_plan->getName() . '</h3>'),
+  );
+  $form['form_description'] = array(
+      '#markup' => t('<p>Ending a plan will result in loss of access to the API Products contained within this plan. All keys will be revoked to these API Products upon the end selected below.</p><br>'),
+  );
+  $form['form_instruction'] = array(
+      '#markup' => t('<strong>Select an end date</strong><br>'),
+  );
+  $form['end_date'] = array(
+      '#title_display' => 'invisible',
+      '#type' => 'textfield',
+      '#date_format' => 'j F Y',
+      '#attributes' => array(
+          'size' => 40,
+          'class' => array('date'),
+      ),
+      '#required' => TRUE,
+      '#default_value' => t('Select an end date...'),
+  );
+
+  $form['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('End This Plan'),
+  );
+
+  if (!$multiple_plans) {
+    $form['plan_id']['#value'] = $rate_plan->getId();
+  }
+
+  $form['#submit'][] = '_devconnect_monetization_end_plan_form_submit';
+
+  return $form;
+}
+
+
+function _devconnect_monetization_end_plan_form_submit(&$form, &$form_state) {
+  $developer_id = _devconnect_monetization_get_developer_id();
+  $client = devconnect_monetization_default_api_client();
+
+  // Get DeveloperRatePlans
+  $developer_rate_plan = new DeveloperRatePlan($developer_id, $client);
+  $developer_rate_plans = $developer_rate_plan->getList();
+
+  // Reload RatePlan
+  $rate_plan = new RatePlan($form['#package_id'], $client);
+  $rate_plan->load($form_state['values']['plan_id']);
+  $developer_rate_plan->setRatePlan($rate_plan);
+
+  $developer_rate_plan = NULL;
+  foreach ($developer_rate_plans as $dev_rate_plan) {
+    if ($dev_rate_plan->getRatePlan()->getId() == $rate_plan->getId()
+        && $dev_rate_plan->getRatePlan()->getMonetizationPackage()->getId() == $rate_plan->getMonetizationPackage()->getId()
+    ){
+      $developer_rate_plan = $dev_rate_plan;
+      break;
+    }
+  }
+  if (!isset($developer_rate_plan)) return;
+
+  $org = new Organization($client);
+  $org->load();
+  $org_timezone = new DateTimeZone($org->getTimezone());
+  $utc_timezone = new DateTimeZone('UTC');
+
+  $separator = strpos($form_state['values']['end_date'], '/') > 0 ? '/' : '-';
+  $end_date = DateTime::createFromFormat("m{$separator}d{$separator}Y", $form_state['values']['end_date'], $org_timezone);
+  $end_date->setTimezone($utc_timezone);
+
+  $developer_rate_plan->setEndDate($end_date->format('Y-m-d H:i:s'));
+  try {
+    $developer_rate_plan->save('update');
+    drupal_set_message(t('Plan is scheduled to end at end of @date, and any refunds will be triggered at that point', array('@date' => $form_state['values']['end_date'])), 'status');
+  }
+  catch(\Apigee\Exceptions\ResponseException $re) {
+    drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    watchdog_exception('devconnect_monetization', $re, $error_info->message, array(), WATCHDOG_CRITICAL);
+  }
+  catch (CommerceApiException $ce) {
+    $message = $ce->getCommerceMessage();
+    if ($message !== NULL) {
+      drupal_set_message($message, 'error');
+    }
+    else {
+      drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    }
+
+    if ($GLOBALS['devconnect_monetization_debug_endpoint_response']) {
+      drupal_set_message('DEBUG: ' . $ce->getCommerceMessage(TRUE), 'warning');
+    }
+    watchdog_exception('devconnect_monetization', $ce->getPrevious(), $ce->getCode(), array(), WATCHDOG_CRITICAL);
+  }
+  catch(\Exception $e) {
+    drupal_set_message('The website encountered an unexpected error. Please try again later. ', 'error');
+    watchdog_exception('devconnect_monetization', $e, $e->getMessage(), array(), WATCHDOG_CRITICAL);
+  }
+}
+
+function _devconnect_monetization_get_developer_id() {
+  if ($GLOBALS['devconnect_monetization_test_user_enabled']) {
+    return $GLOBALS['devconnect_monetization_test_user'];
+  }
+  else {
+    return $GLOBALS['user']->mail;
+  }
+}
+
+function devconnect_monetization_reports() {
+  return theme('devconnect_monetization_reports', $variables);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter for devconnect_developer_apps_edit_form
+ */
+function devconnect_monetization_form_devconnect_developer_apps_edit_form_alter(&$form, &$form_state) {
+  drupal_add_js(drupal_get_path('module', 'devconnect_monetization') . '/js/devconnect_monetization.js', 'file');
+  $form['#validate'][] = 'devconnect_monetization_form_devconnect_developer_apps_edit_form_validate';
+  $form['non-accepted-product'] = array(
+    '#markup' => '<div id="dialog-modal" title="Purchase plan first" style="display:none;"><p></p></div>',
+  );
+}
+
+/**
+ * Validate that developer cannot add a product that does not belong to any plan the has purchased.
+ * If not in a plan he has purchased then product is removed. Messaging is handled in client side
+ */
+function devconnect_monetization_form_devconnect_developer_apps_edit_form_validate(&$form, &$form_state) {
+  try {
+    $products = array();
+    $client = devconnect_monetization_default_api_client();
+    $developer_id = _devconnect_monetization_get_developer_id();
+    $developer = new \Apigee\Commerce\Developer($client);
+    $developer->setEmail($developer_id);
+
+    $developer_rate_plans = $developer->getAcceptedRatePlans();
+
+    foreach ($developer_rate_plans as $developer_rate_plan) {
+      $rate_plan = $developer_rate_plan->getRatePlan();
+      if (count($rate_plan->getRatePlanDetails()) == 0) {
+        foreach ($rate_plan->getMonetizationPackage()->getProducts() as $product) {
+          if (!in_array($product->getId(), $products)) {
+            $products[] = $product->getId();
+          }
+        }
+      }
+      else {
+        foreach($rate_plan->getRatePlanDetails() as $rate_plan_detail) {
+          if (isset($rate_plan_detail->product) && !in_array($rate_plan_detail->product->getId(), $products)) {
+            $products[] = $rate_plan_detail->product->getId();
+          }
+        }
+        foreach ($rate_plan->getMonetizationPackage()->getProducts() as $product) {
+          if (!in_array($product->getId(), $products)) {
+            $products[] = $product->getId();
+          }
+        }
+      }
+    }
+    $not_allowed_products = array();
+    foreach ($form_state['values']['api_product'] as $product_key => $product_composed_id) {
+      if (!in_array(substr($product_composed_id, 5), $products)) {
+        $not_allowed_products[] = $product_key;
+      }
+    }
+    foreach ($not_allowed_products as $key => $product_key) {
+      unset($form_state['values']['api_product'][$product_key]);
+    }
+  }catch(Exception $e) {
+    watchdog('devconnect_monetization', $e->getMessage(), array(), WATCHDOG_CRITICAL);
+  }
+
+}
+
+/*
+ * json call to validate if a developer can add a product to an application, if and only if
+ * he has purchased a plan that cotains this product
+ */
+function devconnect_monetization_accepted_products($user, $product_id) {
+
+  $product_id = substr(rawurldecode($product_id), 5);
+  $response = array(
+      'product' => $product_id,
+      'found' => FALSE,
+  );
+  try {
+    $client = devconnect_monetization_default_api_client();
+    $developer_id = _devconnect_monetization_get_developer_id();
+    $developer = new \Apigee\Commerce\Developer($client);
+    $developer->setEmail($developer_id);
+
+    $developer_rate_plans = $developer->getAcceptedRatePlans();
+
+    foreach ($developer_rate_plans as $developer_rate_plan) {
+      $rate_plan = $developer_rate_plan->getRatePlan();
+      if (count($rate_plan->getRatePlanDetails()) == 0) {
+        foreach ($rate_plan->getMonetizationPackage()->getProducts() as $product) {
+          if ($product->getId() == $product_id) {
+            $response['found'] = TRUE;
+            break 2;
+          }
+        }
+      }
+      else {
+        $products = 0;
+        foreach($rate_plan->getRatePlanDetails() as $rate_plan_detail) {
+          if (isset($rate_plan_detail->product)) {
+            $products++;
+            if ($rate_plan_detail->product->getId() == $product_id) {
+              $response['found'] = TRUE;
+              break 2;
+            }
+          }
+        }
+        if ($products == 0) {
+          foreach ($rate_plan->getMonetizationPackage()->getProducts() as $product) {
+            if ($product->getId() == $product_id) {
+              $response['found'] = TRUE;
+              break 2;
+            }
+          }
+        }
+      }
+    }
+  }
+  catch(Exception $e) {
+    watchdog('devconnect_monetization', $e->getMessage(), array(), WATCHDOG_CRITICAL);
+  }
+  if (!$response['found']) {
+    $response['message'] = t('This product is part of a monetized package. You need to purchase a plan from the Catalog under Monetization before you can access this product.');
+  }
+  return drupal_json_output($response);
+}
+
+/**
+ * Implements hook_permission() to provide a demonstration access string.
+ */
+
+function devconnect_monetization_permission() {
+  $admin_perms = devconnect_monetization_admin_permissions();
+  $finance_perms = devconnect_monetization_finance_permissions();
+  $dev_perms = devconnect_monetization_developer_permissions();
+  return $admin_perms + $finance_perms + $dev_perms;
+}
+
+function devconnect_monetization_admin_permissions() {
+  return array(
+    'access monetization' =>  array(
+      'title' => t('Access Monetization'),
+      'description' => t('Full access'),
+    ),
+    'edit company profile' => array(
+      'title' => t('Edit Company Profile'),
+      'description' => 'Edit Company profile, Bank details, Terms & Conditions and Manage User Roles',
+    ),
+    'access billing & reports' => array(
+      'title' => t('Access Billing & Reports section'),
+      'description' => t('Can download reports and top up balance')
+    ),
+  );
+}
+
+function devconnect_monetization_finance_permissions() {
+  return array(
+    'top up balance' => array(
+      'title' => t('Top up balance'),
+      'description' => t('Allows a user to top up balance')
+    ),
+  );
+}
+
+function devconnect_monetization_developer_permissions() {
+  return array(
+    'edit application' => array(
+      'title' => t('Edit application'),
+      'description' => t('Edit an application that the use owns')
+    )
+  );
+}
+
+function devconnect_monetization_developer_report_form() {
+  $client = devconnect_monetization_default_api_client();
+  $developer_id = _devconnect_monetization_get_developer_id();
+
+  $user = user_load_by_mail($developer_id);
+  $account = entity_load_single('user', $user->uid);
+
+  $preferences = isset($account->field_comm_rev_reprt_preferences[LANGUAGE_NONE][0]['value']) ? json_decode($account->field_comm_rev_reprt_preferences[LANGUAGE_NONE][0]['value']) : NULL;
+  $preferences = $preferences != NULL ? (array)$preferences : array();
+  $org = new Organization($client);
+  $currencies = $org->listSupportedCurrencies();
+  $currs = array();
+  $show_local_currency_option = FALSE;
+  foreach ($currencies as $currency) {
+    if (!in_array($currency->name, array('GBP', 'EUR', 'USD'))) {
+      $show_local_currency_option = TRUE;
+    }
+    else {
+      $currs[$currency->name] = "({$currency->name}) {$currency->displayName}";
+    }
+  }
+
+  if ($show_local_currency_option ||  count($currs) == 0) {
+    $currs = array('LOCAL' => t('Local Currency')) + $currs;
+  }
+
+  $form = array();
+
+
+  $form['start_date'] = array(
+    '#title' => t('From'),
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#date_format' => 'j F Y',
+    '#attributes' => array(
+      'size' => 23,
+      'class' => array('date')
+    ),
+    '#default_value' => isset($preferences['start_date']) ? $preferences['start_date'] : '',
+  );
+
+  $form['end_date'] = array(
+    '#title' => t('To'),
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#size' => 10,
+    '#date_format' => 'j F Y',
+    '#attributes' => array(
+      'size' => 23,
+      'class' => array('date')
+    ),
+    '#default_value' => isset($preferences['end_date']) ? $preferences['end_date'] : '',
+  );
+
+  $form['reporting_level'] = array(
+    '#type' => 'radios',
+    '#required' => TRUE,
+    '#options' => array(
+      'SUMMARY' => t('Summary Report'),
+      'DETAILED' => t('Detailed Report'),
+    ),
+    '#default_value' => isset($preferences['reporting_level']) ? $preferences['reporting_level'] : 'SUMMARY',
+  );
+
+  if (count($currs) > 1) {
+    list($default_currency) = array_keys($currs);
+    $form['currency'] = array(
+      '#type' => 'radios',
+      '#required' => TRUE,
+      '#options' => $currs,
+      '#default_value' => isset($preferences['currency']) && array_key_exists($preferences['currency'], $currs) ? $preferences['currency'] : $default_currency,
+    );
+  }
+  else {
+    $currs_keys = array_keys($currs);
+    $form['currency'] = array(
+      '#type' => 'value',
+      '#value' => 'LOCAL',
+    );
+  }
+
+  $form['report_name'] = array(
+    '#type' => 'textfield',
+  );
+  $form['report_desc'] = array(
+    '#type' => 'textfield',
+    '#attributes' => array('placeholder' => 'Enter a description...')
+  );
+  $form['#base_inputs'] = array(
+    'date_range',
+    'reporting_level',
+    'currency',
+    'report_name',
+    'report_desc',
+  );
+
+  $form['download_report'] = array(
+    '#type' => 'submit',
+    '#value' => t('Download Report (CSV)'),
+  );
+
+  $form['#validate'][] = 'devconnect_monetization_developer_report_validate';
+  $form['#submit'][] = 'devconnect_monetization_developer_report_submit';
+  $form['#theme'] = 'devconnect_monetization_developer_report_form';
+
+  return $form;
+}
+
+function devconnect_monetization_developer_report_validate($form, &$form_state) {
+  if ($form_state['values']['currency'] == '') {
+    drupal_set_message(t('You must specify a currency'), 'error');
+    form_set_error('currency', t('You must specify a currency'));
+  }
+
+  $separator = strpos($form_state['values']['start_date'], '/') > 0 ? '/' : '-';
+  $start_date = DateTime::createFromFormat("m{$separator}d{$separator}Y", $form_state['values']['start_date']);
+  $separator = strpos($form_state['values']['end_date'], '/') > 0 ? '/' : '-';
+  $end_date = DateTime::createFromFormat("m{$separator}d{$separator}Y", $form_state['values']['end_date']);
+
+  if (!is_object($start_date)) {
+    form_set_error('start_date', t('Incorect date format in From field'));
+  }
+  else {
+    $form_state['values']['start_date_parsed'] = $start_date;
+  }
+
+  if (!is_object($end_date)) {
+    form_set_error('end_date', t('Incorrect date format in To field'));
+  }
+  else {
+    $form_state['values']['end_date_parsed'] = $end_date;
+  }
+
+  if (count(form_get_errors()>0)) {
+    drupal_add_js('jQuery("div.reports.tabbable a[href=\'#tab2\']").tab("show");', 'inline');
+  }
+}
+
+function devconnect_monetization_developer_report_submit(&$form, &$form_state) {
+  $client = devconnect_monetization_default_api_client();
+  $developer_id = _devconnect_monetization_get_developer_id();
+  $dev = new Developer($client);
+  $dev->setEmail($developer_id);
+
+  $report = new stdClass();
+  $report->currencyOption = $form_state['values']['currency'];
+  $report->transactionTypes = array('PURCHASE', 'CHARGE', 'REFUND', 'CREDIT', 'SETUPFEES', 'TERMINATIONFEES', 'RECURRINGFEES');
+  if ($form_state['values']['reporting_level'] == 'SUMMARY') {
+    $report->showSummary = true;
+    $report->groupBy = array('PACKAGE', 'PRODUCT', 'DEVELOPER', 'APPLICATION');
+    $report_prefix_file_name = 'Summarized';
+  }
+  else {
+    $report->showTxDetail = TRUE;
+    $report_prefix_file_name = 'Detailed';
+  }
+
+  $report->fromDate = $form_state['values']['start_date_parsed']->format('Y-m-d');
+  $report->toDate = $form_state['values']['end_date_parsed']->format('Y-m-d');
+
+  $preferences = array(
+    'start_date' => $form_state['values']['start_date'],
+    'end_date' => $form_state['values']['end_date'],
+    'reporting_level' => $form_state['values']['reporting_level'],
+    'currency' => $form_state['values']['currency'],
+  );
+
+  $user = user_load_by_mail($developer_id);
+  if ($user === FALSE) {
+    drupal_set_message('Your user does not exist in this DevConnect instance.', 'error');
+    return '';
+  }
+  $account = entity_load_single('user', $user->uid);
+  $account->field_comm_rev_reprt_preferences[LANGUAGE_NONE][0]['value'] = json_encode($preferences);
+
+  $field_info = field_info_field('field_comm_rev_reprt_preferences');
+  $fields = array($field_info['id']);
+
+  if (isset($account->field_comm_rev_reprt_preferences[LANGUAGE_NONE][0]['value'])) {
+    field_sql_storage_field_storage_write('user', $account, 'update', $fields);
+  }
+  else {
+    field_sql_storage_field_storage_write('user', $account, 'insert', $fields);
+  }
+  cache_clear_all("field:user:" . $user->uid, 'cache_field');
+  try {
+    $response = $dev->getRevenueReport($report);
+
+    header('Content-Disposition: attachment; filename="' . $report_prefix_file_name . '_Revenuew_Report-' . $report->fromDate . '_to_' . $report->toDate . '-' . time() . '.csv"');
+    header('Content-Type: application/octet-stream;charset=utf-8');
+    header('Content-Length: ' . strlen($response));
+    header('Connection: close');
+
+    echo $response;
+    die();
+  }
+  catch(Exception $e) {
+    if ($e->getCode() == 404) {
+      drupal_set_message(t('There is no data within this date range. Please try another date range'), 'warning');
+    }
+    else {
+      drupal_set_message(t('There was an error trying to download your report. Please try again, if the problem persists please contact your administrator.'), 'error');
+    }
+  }
+  $form_state['redirect'] = array('users/me/monetization/billing', array('fragment' => 'tab2'));
+}
+
+/**
+ * Set default developer values
+ *
+ * @param array $edit
+ * @param object $account
+ * @param mixed $category
+ */
+function devconnect_monetization_user_presave(&$edit, $account, $category) {
+  $default_role = variable_get('devconnect_monetization_default_role', MONETIZATION_ADMIN_ROLE_NAME);
+  if ($account->is_new) {
+    $edit['field_comm_developer_type'][LANGUAGE_NONE][0]['value'] = isset($edit['field_comm_developer_type'][LANGUAGE_NONE][0]['value']) ? $edit['field_comm_developer_type'][LANGUAGE_NONE][0]['value'] : DeveloperType::UNTRUSTED;
+    $edit['field_comm_billing_type'][LANGUAGE_NONE][0]['value'] = isset($edit['field_comm_billing_type'][LANGUAGE_NONE][0]['value']) ? $edit['field_comm_billing_type'][LANGUAGE_NONE][0]['value'] : BillingType::PREPAID;
+    $edit['field_comm_is_broker'][LANGUAGE_NONE][0]['value'] = isset($edit['field_comm_is_broker'][LANGUAGE_NONE][0]['value']) ? $edit['field_comm_is_broker'][LANGUAGE_NONE][0]['value'] : false;
+    $edit['field_comm_has_self_billing'][LANGUAGE_NONE][0]['value'] = isset($edit['field_comm_is_broker'][LANGUAGE_NONE][0]['value']) ? $edit['field_comm_has_self_billing'][LANGUAGE_NONE][0]['value'] : false;
+    $edit['field_comm_rev_reprt_preferences'][LANGUAGE_NONE][0]['value'] = isset($edit['field_comm_is_broker'][LANGUAGE_NONE][0]['value']) ? $edit['field_comm_has_self_billing'][LANGUAGE_NONE][0]['value'] : array();
+    if (!isset($edit['field_comm_developer_roles'][LANGUAGE_NONE][0]['value'])) {
+      $edit['field_comm_developer_roles'][LANGUAGE_NONE][0]['value'] = json_encode(array($default_role));
+    }
+    $role = user_role_load_by_name($default_role);
+    $edit['roles'][$role->rid] = 1;
+  }
+  /*
+   * @TODO Make a array_diff and if edit has a commerce role that developer does not have it
+   * added to the object, if the account has it and edit does not, then remove the
+   * role from the user
+   */
+}
+
+/**
+ * Implement hook_form_alter()
+ *
+ * @param array $form
+ * @param array $form_state
+ * @param mixed $form_id
+ */
+function devconnect_monetization_form_alter(&$form, &$form_state, $form_id) {
+
+  switch($form_id) {
+    // If monetization fields, then hide them from user
+    case 'user_profile_form':
+      if (user_access('can edit monetization')) {
+        $form['field_comm_company_id']['#access'] = FALSE;
+        $form['field_comm_registration_id']['#access'] = FALSE;
+        $form['field_comm_vat_tax_number']['#access'] = FALSE;
+        $form['field_comm_approx_tax_rate']['#access'] = FALSE;
+        $form['field_comm_developer_legal_name']['#access'] = FALSE;
+        $form['field_comm_is_broker']['#access'] = FALSE;
+        $form['field_comm_developer_type']['#access'] = FALSE;
+        $form['field_comm_billing_type']['#access'] = FALSE;
+        $form['field_comm_has_self_billing']['#access'] = FALSE;
+        $form['field_comm_billing_profile']['#access'] = FALSE;
+        $form['field_comm_supported_currency']['#access'] = FALSE;
+        $form['field_comm_developer_phone']['#access'] = FALSE;
+        $form['field_comm_developer_address']['#access'] = FALSE;
+        $form['field_comm_developer_category']['#access'] = FALSE;
+        $form['field_comm_developer_roles']['#access'] = FALSE;
+      }
+      $form['field_comm_rev_reprt_preferences']['#access'] = FALSE;
+      break;
+  }
+}
+
+function devconnect_monetization_remove_plan_from_user($package_id, $dev_rate_plan_id) {
+  $client = devconnect_monetization_default_api_client();
+  $developer_id = _devconnect_monetization_get_developer_id();
+
+  $dev_rate_plan_id = rawurldecode($dev_rate_plan_id);
+  try {
+
+    $dev_rate_plan = new DeveloperRatePlan($developer_id, $client);
+    $dev_rate_plans = $dev_rate_plan->getList();
+
+    foreach ($dev_rate_plans as $dev_rate_plan) {
+      if ($dev_rate_plan->getId() == $dev_rate_plan_id) {
+        $timezone = new DateTimeZone('UTC');
+        $today = new DateTime('today', $timezone);
+        $start_date = DateTime::createFromFormat('Y-m-d H:i:s', $dev_rate_plan->getStartDate(), $timezone);
+        if ($start_date > $today) {
+          $dev_rate_plan->delete($dev_rate_plan_id);
+          drupal_set_message('Your plan has been removed.', 'status');
+          drupal_goto('users/me/monetization/packages', array('fragment' => 'tab2'));
+          return;
+        }
+      }
+    }
+    throw new Exception('Could not delete developer rate plan. Either does not exists or start and end dates not in the future');
+  }
+  catch (CommerceApiException $cae) {
+    if ($cae->getCommerceCode() == CommerceApiException::ONLY_FUTURE_DEVELOPER_RATE_PLAN_CAN_BE_DELETED) {
+      drupal_set_message($cae->getCommerceMessage(), 'error');
+      watchdog('error', $cae->getCommerceMessage(), NULL, WATCHDOG_ERROR);
+    }
+  }
+  catch (Exception $e) {
+    drupal_set_message('Could not complete the operation. Please try again later.', 'error');
+    watchdog('error', $e->getMessage(), NULL, WATCHDOG_ERROR);
+    drupal_goto('users/me/monetization/packages', array('fragment' => 'tab2'));
+  }
+}
+

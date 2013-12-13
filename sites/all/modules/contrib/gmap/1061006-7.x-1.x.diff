@@ -1,0 +1,14 @@
+diff --git a/gmap.views.inc b/gmap.views.inc
+index 4ad9f43..85e3b67 100644
+--- a/gmap.views.inc
++++ b/gmap.views.inc
+@@ -79,6 +79,9 @@ function template_preprocess_gmap_views_view_gmapextended(&$vars) {
+   */
+ 
+   foreach ($markers as $offset => $marker) {
++    // Set up 'opts' array to make tooltips work
++    $markers[$offset]['opts'] = array('title' => isset($marker['title']) ? decode_entities($marker['title']) : NULL); 
++
+     switch ($options['clickmode']) {
+       case 'render':
+         $markers[$offset]['text'] = $vars['result'][$offset];

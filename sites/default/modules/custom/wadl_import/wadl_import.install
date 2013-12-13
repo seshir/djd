@@ -1,0 +1,43 @@
+<?php
+
+/**
+ * Implements hook_enable()
+ */
+function wadl_import_enable() {
+  // Determine if the vocabularies exist
+  $vocabularies = taxonomy_get_vocabularies();
+  foreach($vocabularies as $vocab) {
+    if ($vocab->name == 'API Name') {
+      variable_set('wadl_import_apiname_vocabulary', 0);
+    }
+    if ($vocab->machine_name == 'api_tag') {
+      variable_set('wadl_import_apientitygroup_vocabulary', 0);
+    }
+  }
+  // Determine whether or not the apiname vocabulary already exists, or if it's been already installed and set them to a variable
+  $name = variable_get('wadl_apiname_vocabulary', 1);
+  $entity = variable_get('wadl_import_apientitygroup_vocabulary', 1);
+
+  if ((bool)$name) {
+    $vocabulary = new stdClass();
+    $vocabulary->name = t('API Name');
+    $vocabulary->machine_name = t('api_name');
+    $vocabulary->description = t('The high level API Name for the bundle of API Methods and API Entity Groups.');
+    $vocabulary->hierarchy = 1;
+    $vocabulary->module = 'wadl_import';
+    $vocabulary->weight = -10;
+    taxonomy_vocabulary_save($vocabulary);
+    variable_set('wadl_import_apiname_vocabulary', 0);
+  }
+  if ((bool)$entity) {
+    $vocabulary = new stdClass();
+    $vocabulary->name = t('API Tag');
+    $vocabulary->machine_name = t('api_tag');
+    $vocabulary->description = t('The entity group is derived from the apigee:tag from the WADL.');
+    $vocabulary->hierarchy = 1;
+    $vocabulary->module = 'wadl_import';
+    $vocabulary->weight = -9;
+    taxonomy_vocabulary_save($vocabulary);
+    variable_set('wadl_import_apientitygroup_vocabulary', 0);
+  }
+}

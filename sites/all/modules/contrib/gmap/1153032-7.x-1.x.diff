@@ -1,0 +1,91 @@
+diff --git a/gmap_plugin_style_gmap.inc b/gmap_plugin_style_gmap.inc
+old mode 100644
+new mode 100755
+index 08ce4a1..fffe4fb
+--- a/gmap_plugin_style_gmap.inc
++++ b/gmap_plugin_style_gmap.inc
+@@ -94,15 +94,21 @@ class gmap_plugin_style_gmap extends views_plugin_style {
+     }
+ 
+     $defaults = gmap_defaults();
+-    $lat_field = 'gmap_lat';
+-    $lon_field = 'gmap_lon';
+ 
++    if ($this->options['datasource'] == 'location') {
++      $lat_field = 'gmap_lat';
++      $lon_field = 'gmap_lon';
++    }
++    else if ($this->options['datasource'] == 'geofield') {
++      $lat_field = 'lat';
++      $lon_field = 'lon';
++    }
+     // Determine fieldname for latitude and longitude fields.
+-    if ($this->options['datasource'] == 'fields') {
+-      $lat_fied_obj = $this->view->display_handler->get_handler('field', $this->options['latfield']);
++    else if ($this->options['datasource'] == 'fields') {
++      $lat_field_obj = $this->view->display_handler->get_handler('field', $this->options['latfield']);
+       $lon_field_obj = $this->view->display_handler->get_handler('field', $this->options['lonfield']);
+-      $lat_field = $lat_fied_obj->field_alias;
+-      $lon_field = $lon_field_obj->field_alias;
++      $lat_field = $this->options['latfield'];
++      $lon_field = $this->options['lonfield'];
+     }
+ 
+     $tooltip_field = '';
+@@ -170,8 +176,29 @@ class gmap_plugin_style_gmap extends views_plugin_style {
+ 
+       foreach ($records as $row_index => $row) {
+         $this->view->row_index = $row_index;
+-        $lat = (float)$row->{$lat_field};
+-        $lon = (float)$row->{$lon_field};
++
++        if ($this->options['datasource'] == 'location') {
++          $lat = (float)$row->{$lat_field};
++          $lon = (float)$row->{$lon_field};
++        }
++        else if ($this->options['datasource'] == 'geofield') {
++          $geofield_name = 'field_' . $this->options['geofield'];
++          $geofield = isset($row->{$geofield_name}[0]['raw']) ? $row->{$geofield_name}[0]['raw'] : NULL;
++          if ($geofield) {
++            $lat = (float)$geofield[$lat_field];
++            $lon = (float)$geofield[$lon_field];
++          }
++        }
++        else if ($this->options['datasource'] == 'fields') {
++          $custom_field_latname = 'field_' . $lat_field;
++          $custom_field_lonname = 'field_' . $lon_field;
++          $custom_field_lat = isset($row->{$custom_field_latname}[0]['raw']) ? $row->{$custom_field_latname}[0]['raw'] : NULL;
++          $custom_field_lon = isset($row->{$custom_field_lonname}[0]['raw']) ? $row->{$custom_field_lonname}[0]['raw'] : NULL;
++          if ($custom_field_lat && $custom_field_lon) {
++            $lat = (float)$custom_field_lat['value'];
++            $lon = (float)$custom_field_lon['value'];
++          }
++        }
+ 
+         // $row->nid is present in node views, views without node as the base table must include the nid field,
+         // which will be in $row->node_nid if present.
+@@ -311,6 +338,7 @@ class gmap_plugin_style_gmap extends views_plugin_style {
+       '#title' => t('Data Source'),
+       '#options' => array(
+         'location' => t('Location.module'),
++        'geofield' => t('Geofield.module'),
+         'fields' => t('Choose latitude and longitude fields'),
+       //'geocode' => t('Just-in-time geocoding on field named "address"'),
+       ),
+@@ -338,6 +366,16 @@ class gmap_plugin_style_gmap extends views_plugin_style {
+       '#dependency' => array('edit-style-options-datasource' => array('fields')),
+     );
+ 
++    $form['geofield'] = array(
++      '#title' => t('Geofield field'),
++      '#description' => t('Select the Geofield source field.'),
++      '#type' => 'select',
++      '#options' => $field_options,
++      '#default_value' => $this->options['geofield'],
++      '#process' => array('ctools_dependent_process'),
++      '#dependency' => array('edit-style-options-datasource' => array('geofield')),
++    );
++
+     $form['markers'] = array(
+       '#type' => 'select',
+       '#title' => t('Marker handling'),

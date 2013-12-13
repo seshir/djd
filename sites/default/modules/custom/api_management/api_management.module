@@ -1,0 +1,281 @@
+<?php
+
+define('VID_FORUMS', 2);      // Forums
+define('VID_API_NAME', 4);    // API Name
+define('VID_API_TAG', 5);     // API Tag
+define('API_ADMIN', 3);       // Drupal Administrator Role
+
+ /**
+ * @file
+ * API Management module.
+ *
+ * @author
+ * Cesar Galindo <cesar@apigee.com>
+ *
+ * @since 2013-01-Sept
+ */
+
+
+/**
+ *  Implementation of hook_menu()
+ */
+function api_management_menu() {
+  $items['admin/api/%ctools_js/display/%'] = array(
+      'title' => 'Initialize Display',
+      'page callback' => 'api_management_reset_display',
+      'page arguments' => array(2, 4),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+  );
+  $items['admin/api/%ctools_js/api_management_change_api_name_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_change_api_name',
+      'page arguments' => array(2, 4, 5, 6, 7),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.inc',
+  );
+  $items['admin/api/%ctools_js/api_management_delete_api_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_delete_api',
+      'page arguments' => array(2, 4, 5, 6),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.inc',
+  );
+  $items['admin/api/%ctools_js/api_management_create_api_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_create_api',
+      'page arguments' => array(2, 4, 5, 6),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.inc',
+  );
+  $items['admin/api/%ctools_js/api_management_internal_api_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_internal_api',
+      'page arguments' => array(2, 4, 5, 6),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.inc',
+  );
+  $items['admin/api/%ctools_js/api_management_private_api_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_private_api',
+      'page arguments' => array(2, 4, 5, 6),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.inc',
+  );
+  $items['admin/api/%ctools_js/api_management_public_api_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_public_api',
+      'page arguments' => array(2, 4, 5, 6),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.inc',
+  );
+  $items['admin/api/%ctools_js/cancel'] = array(
+      'title' => 'Cancel Action',
+      'page callback' => 'api_management_ajax_cancel',
+      'page arguments' => array(2),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.inc',
+  );
+  $items['admin/api/edit_api_management/%'] = array(
+    'title' => 'APIs',
+    'page callback' => 'api_management_edit',
+				'page arguments' => array(3, 4),
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'api_management.admin.edit.inc',
+  );
+  $items['admin/api/%ctools_js/api_management_add_user_api_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_add_user_api',
+      'page arguments' => array(2, 4),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.edit.inc',
+  );
+  $items['admin/api/%ctools_js/api_management_remove_user_api_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_remove_user_api',
+      'page arguments' => array(2, 4, 5, 6),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.edit.inc',
+  );
+  $items['admin/api/getuser'] = array(
+    'page callback' => '_api_management_get_user',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'api_management.admin.edit.inc',
+  );
+
+  $items['admin/api/%ctools_js/api_management_add_api_console_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_add_api_console',
+      'page arguments' => array(2, 4, 5, 6),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.edit.inc',
+  );
+  $items['admin/api/%ctools_js/api_management_remove_api_console_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_remove_api_console',
+      'page arguments' => array(2, 4, 5, 6),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.inc',
+  );
+  $items['admin/api/get_api_console'] = array(
+    'page callback' => '_api_management_get_api_console',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'api_management.admin.edit.inc',
+  );
+
+  $items['admin/api/%ctools_js/api_management_add_api_doc_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_add_api_doc',
+      'page arguments' => array(2, 4, 5, 6),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.edit.inc',
+  );
+  $items['admin/api/%ctools_js/api_management_remove_api_doc_form/%'] = array(
+      'title' => 'MY Module',
+      'page callback' => '_api_management_ajax_remove_api_doc',
+      'page arguments' => array(2, 4, 5, 6),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+      'file' => 'api_management.admin.edit.inc',
+  );
+  $items['admin/api/get_api_doc'] = array(
+    'page callback' => '_api_management_get_api_doc',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'api_management.admin.edit.inc',
+  );
+  $items['admin/api/update_developer_count'] = array(
+    'page callback' => '_api_management_update_developer_count',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'api_management.admin.edit.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function api_management_entity_info() {
+  $items['api_management'] = array(
+    'label' => t('API Management'),
+    'plural label' => t('API Management'),
+    'description' => t('Admin Tool to Manage App Keys'),
+    'entity class' => 'APIManagementEntity',
+    'controller class' => 'APIManagementEntityController',
+    'entity keys' => array(
+      'id' => 'id',
+      'label' => 'name',
+    ),
+    'module' => 'api_management',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_entity_property_info().
+ */
+function api_management_entity_property_info() {
+
+  $info['api_management']['properties'] = array(
+    'id' => array(
+      'label' => t('ID'),
+      // Make use of the full URL as ID as the gphoto ID is not unique (it's
+      // only unique inside an album).
+      'api_management name' => 'id',
+    ),
+    'productName' => array(
+      'label' => t('Product Machine Name'),
+      'type' => 'text',
+    ),
+    'displayName' => array(
+      'label' => t('Product Display Name'),
+      'type' => 'text',
+    ),
+    'status' => array(
+      'label' => t('Status'),
+      'type' => 'text',
+    ),
+    'apiProductRoles' => array(
+      'label' => t('API Product Roles'),
+      'type' => 'text',
+    ),
+    'apiMSName' => array(
+      'label' => t('API Management Server Name'),
+      'type' => 'text',
+    ),
+    'apiChange' => array(
+      'label' => t('API Change Name'),
+      'type' => 'text',
+    ),
+    'developerCount' => array(
+      'label' => t('Developer Count'),
+      'type' => 'text',
+    ),
+    'editUrl' => array(
+      'label' => t('Edit'),
+      'type' => 'text',
+    ),
+    'makePublic' => array(
+      'label' =>t('Make Public'),
+      'type' => 'text',
+    ),
+    'makePrivate' => array(
+      'label' =>t('Make Private'),
+      'type' => 'text',
+    ),
+    'makeInternal' => array(
+      'label' => t('Make Internal'),
+      'type' => 'text',
+    ),
+    'delete' => array(
+      'label' => t('Delete'),
+      'type' => 'text',
+    ),
+  );
+  return $info;
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function api_management_views_api() {
+  return array(
+    'api' => '3.0',
+    'path' => drupal_get_path('module', 'api_management'),
+  );
+}
+
+/**
+ * Force to display as checkboxes
+ */
+function api_management_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == 'api_product_node_form') {
+    $form['title']['#title'] = t('API Display Name "DO NOT CHANGE"');
+    $form['api_roles'][LANGUAGE_NONE]['#type'] = 'checkboxes';
+  }
+}
+
+/**
+ * Retrieves list of roles
+ */
+function _api_management_get_api_roles() {
+  return user_roles();
+}

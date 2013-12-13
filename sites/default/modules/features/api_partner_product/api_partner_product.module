@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the API Partner Product feature.
+ */
+
+include_once 'api_partner_product.features.inc';

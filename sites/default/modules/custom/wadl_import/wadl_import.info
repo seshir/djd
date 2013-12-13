@@ -1,0 +1,14 @@
+name = WADL Import
+description = Allows admins to import specific documentation using their WADL and SOAP UI.
+package = Swisscom
+dependencies[] = token
+version = "7.x-1.2"
+core = 7.x
+
+files[] = classes/wadl_import.class.php
+files[] = includes/wadl_import.node_alter.inc
+files[] = includes/wadl_import.theme.inc
+files[] = includes/wadl_import.forms.inc
+files[] = includes/wadl_import.components.inc
+files[] = includes/wadl_import.batch.inc
+

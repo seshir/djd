@@ -1,0 +1,5 @@
+name = Swisscom App Attribute Management
+description = "Allows custom attributes to be set for Developer Apps"
+package = "Swisscom"
+core = "7.x"
+version = "7.x-1.0"

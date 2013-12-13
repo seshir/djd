@@ -1,0 +1,23 @@
+
+body.admin-menu {
+  margin-top: 0px !important;
+}
+tr.no-api {
+  background: #ffb8af !important;
+}
+tr.new-api {
+  background: #b3ff9c !important;
+}
+tr.Public-api {
+  background: #fff7b3 !important;
+}
+tr.Private-api {
+  background: #def9ff !important;
+}
+.red {
+  color: red;
+}
+
+.pull-right {
+  float: right;
+}

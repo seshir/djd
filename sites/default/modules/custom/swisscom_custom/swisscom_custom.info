@@ -1,0 +1,7 @@
+name = Swisscom Custom
+description = Swisscom modifications to Dev Portal.
+package = Swisscom
+core = 7.x
+version = "7.x-1.2.1"
+
+dependencies[] = views

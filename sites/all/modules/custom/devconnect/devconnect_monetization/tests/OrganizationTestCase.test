@@ -1,0 +1,52 @@
+<?php
+
+class OrganizationTestCase extends CommerceTest {
+
+  /**
+   * @var Apigee\Commerce\Organization
+   */
+  private $org;
+
+  public static function getInfo() {
+    return array(
+      'name' => t('Commerce Organization'),
+      'description' => t('Tests the ability of the devconnect_monetization module to handle Organizations.'),
+      'group' => t('Devconnect Commerce'),
+    );
+  }
+
+
+  public function setUp() {
+    parent::setUp();
+    $this->org = new Apigee\Commerce\Organization($this->client);
+  }
+
+  public function testOrg() {
+    $my_org = $this->client->get_org();
+    try {
+      $list = $this->org->list_organization_identifiers();
+      $this->assert(count($list) > 0, 'Organization list is not empty');
+
+      if (!in_array($my_org, $list)) {
+        $this->fail("Organization '$my_org' is not in the organization list.");
+        return;
+      }
+    }
+    catch (Exception $e) {
+      $this->fail($e->getCode() . ' ' . $e->getMessage());
+    }
+
+    try {
+      $this->org->load($my_org);
+      $this->assert($my_org == $this->org->get_name(), 'Organization loaded correctly');
+      //if (function_exists('drush_print')) {
+      //  drush_print(print_r($this->org, TRUE));
+      //}
+    }
+    catch (Exception $e) {
+      $this->fail($e->getCode() . ' ' . $e->getMessage());
+    }
+
+    // TODO: Test org create, update and delete.
+  }
+}

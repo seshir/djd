@@ -1,0 +1,14 @@
+name = Deployment UI
+description = Provides a UI for the Deploy module
+package = Deployment
+core = 7.x
+dependencies[] = deploy
+dependencies[] = ctools
+configure = admin/structure/deploy
+
+; Information added by drupal.org packaging script on 2013-07-12
+version = "7.x-2.0-alpha2"
+core = "7.x"
+project = "deploy"
+datestamp = "1373620271"
+

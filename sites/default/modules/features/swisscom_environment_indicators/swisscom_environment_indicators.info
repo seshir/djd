@@ -1,0 +1,15 @@
+name = Swisscom Environment Indicators
+description = Change the admin toolbar depending on what environment you are logged into.
+core = 7.x
+package = Swisscom
+php = 5.2.4
+version = 7.x-1.0
+project = swisscom_environment_indicators
+dependencies[] = ctools
+dependencies[] = environment_indicator
+features[ctools][] = environment_indicator:default_environment_indicator_environments:1
+features[environment_indicator_environment][] = dev
+features[environment_indicator_environment][] = prod
+features[environment_indicator_environment][] = stage
+features[environment_indicator_environment][] = test
+features[features_api][] = api:1

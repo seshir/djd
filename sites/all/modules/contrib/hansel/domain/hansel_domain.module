@@ -1,0 +1,89 @@
+<?php
+/**
+ * @file
+ * Hansel domain integration
+ *
+ * This modules provides switches and breadcrumb actions for domains.
+ */
+
+/**
+ * Implements hook_hansel_action_types().
+ */
+function hansel_domain_hansel_action_types() {
+  return array(
+    'add domain' => array(
+      'get crumbs' => 'hansel_domain_action_add_domain_get_crumbs',
+      'info' => 'hansel_domain_action_add_domain_info',
+    ),
+  );
+}
+
+/**
+ * Callback for "add domain" breadcrumb action
+ *
+ * @param array $arguments Values from the configuration form.
+ * @return array
+ */
+function hansel_domain_action_add_domain_get_crumbs($arguments) {
+  global $_domain;
+
+  if (empty($_domain)) {
+    // This happens only if the domain module is not installed correctly
+    return array();
+  }
+
+  return array(
+    array(
+      'title' => $_domain['sitename'],
+      'path' => $_domain['path'],
+    )
+  );
+}
+
+/**
+ * Callback for "add domain" action to generate the information line
+ *
+ * @param array $arguments Values from the configuration form.
+ * @return string
+ */
+function hansel_domain_action_add_domain_info($arguments) {
+  return t('Add domain');
+}
+
+/**
+ * Implements hook_hansel_switch_types().
+ */
+function hansel_domain_hansel_switch_types() {
+  return array(
+    'subdomain' => array(
+      'compare' => 'hansel_domain_switch_subdomain_compare',
+    ),
+    'domain id' => array(
+      'compare' => 'hansel_domain_switch_domain_id_compare',
+    ),
+  );
+}
+
+/**
+ * Callback for "subdomain" switch to compare a given value.
+ *
+ * @param array $arguments
+ * @param string $value
+ * @return boolean
+ */
+function hansel_domain_switch_subdomain_compare($arguments, $value) {
+  global $_domain;
+  return drupal_strtolower($_domain['subdomain']) == drupal_strtolower($value);
+}
+
+/**
+ * Callback for "domain id" switch to compare a given value.
+ *
+ * @param array $arguments
+ * @param string $value
+ * @return boolean
+ */
+function hansel_domain_switch_domain_id_compare($arguments, $value) {
+  global $_domain;
+  return $_domain['domain_id'] == $value;
+}

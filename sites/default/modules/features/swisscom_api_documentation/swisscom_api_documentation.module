@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Swisscom API Documentation feature.
+ */
+
+include_once 'swisscom_api_documentation.features.inc';

@@ -1,0 +1,32 @@
+/* FORUM LIST ICONS *********************************************************/
+.forum-list-icon-wrapper {
+  border: 1px solid #EAF8E4;
+  background: #C1C1C1;
+  background: -webkit-gradient(linear, left top, left bottom, from(#DFDFDF), to(#E8E8E8));
+  background: -moz-linear-gradient(top, #DFDFDF, #E8E8E8);
+  -webkit-border-radius: 5px;
+  -moz-border-radius: 5px;
+  border-radius: 5px;
+
+  text-shadow: rgba(0,0,0,.4) 0 1px 0;
+  color: #333333;
+  font-family: Helvetica, Arial, Sans-Serif;
+  text-decoration: none;
+  vertical-align: middle;
+  margin: 10px;
+  width: 50px;
+  height: 50px;
+  display: block;
+}
+
+tr.even td.forum-list-icon-default .forum-list-icon-wrapper span,
+tr.odd td.forum-list-icon-default .forum-list-icon-wrapper span,
+.forum-list-icon-legend .forum-list-icon-default {
+  background: transparent url(images/mail-darkblue.png) no-repeat center center;
+}
+
+tr.even td.forum-list-icon-new-posts .forum-list-icon-wrapper span,
+tr.odd td.forum-list-icon-new-posts .forum-list-icon-wrapper span,
+.forum-list-icon-legend .forum-list-icon-new-posts {
+  background: transparent url(images/mail-new-darkblue.png) no-repeat center center;
+}

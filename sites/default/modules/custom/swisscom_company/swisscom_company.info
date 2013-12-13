@@ -1,0 +1,6 @@
+name = Swisscom Company
+description = Swisscom Company allows developers to be grouped into companies.
+package = Swisscom
+core = 7.x
+version = "7.x-1.0"
+files[] = swisscom.entity.company.inc

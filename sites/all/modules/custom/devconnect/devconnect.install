@@ -1,0 +1,117 @@
+<?php
+
+/**
+ * Implements hook_requirements().
+ *
+ * Ensures that mcrypt is present at install time.
+ *
+ * @param $phase
+ * @return array
+ */
+function devconnect_requirements($phase) {
+  $requirements = array();
+
+  if ($phase == 'install') {
+    $t = get_t();
+
+    if (!defined('MCRYPT_RIJNDAEL_128')) {
+      $requirements['mcrypt'] = array(
+        'description' => 'PHP must have the mcrypt library for DevConnect to work.',
+        'severity' => REQUIREMENT_ERROR,
+        'value' => $t('Please install the PHP mcrypt extension.'),
+        'title' => $t('Missing library'),
+      );
+
+      if (!defined('CURLE_OK')) {
+        $requirements['cURL'] = array(
+          'description' => 'PHP must have the cURL library for DevConnect to work.',
+          'severity' => REQUIREMENT_ERROR,
+          'value' => $t('Please install the PHP cURL extension.'),
+          'title' => $t('Missing library'),
+        );
+      }
+
+      $result = drupal_http_request('http://www.google.com/', array('method' => 'HEAD'));
+      if (floor($result->code / 100) != 2) {
+        $requirements['setsebool'] = array(
+          'description' => 'Apache\'s process must be able to create outbound network connections.',
+          'severity' => REQUIREMENT_ERROR,
+          'value' => $t('Please run the following command:') . "\nsetsebool -P httpd_can_network_connect 1",
+          'title' => $t('SELinux configuration problem')
+        );
+      }
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_install().
+ *
+ * Cleans up old devconnect_apigee variable and gives Drupal Admins permissions
+ * to administer org settings.
+ */
+function devconnect_install() {
+  variable_del('devconnect_oauth_policies');
+
+  $role = user_role_load_by_name('Drupal Administrator');
+  if ($role) {
+    user_role_grant_permissions($role->rid, array('administer organization settings'));
+  }
+}
+
+/**
+ * Disable deprecated modules in preparation for their removal in R24.
+ */
+function devconnect_update_7423(&$sandbox) {
+  // Make sure Apigee autoloader has been run
+  drupal_load('module', 'devconnect');
+  devconnect_boot();
+
+  $list = db_select('system', 's')
+    ->condition('type', 'module')
+    ->condition('status', 0)
+    ->condition('name', 'devconnect%', 'LIKE')
+    ->fields('s', array('name', 'filename'))
+    ->execute()
+    ->fetchAll(PDO::FETCH_NUM);
+  $missing_modules = array();
+
+
+  foreach ($list as $module) {
+    list($name, $filename) = $module;
+    if (!file_exists(DRUPAL_ROOT . '/' . $filename)) {
+      $missing_modules[] = $name;
+    }
+  }
+
+  if (count($missing_modules) > 0) {
+    if (function_exists('drush_print')) {
+      drush_print('Removing these missing modules: ' . join(', ', $missing_modules));
+    }
+    db_delete('system')
+      ->condition('type', 'module')
+      ->condition('name', $missing_modules)
+      ->execute();
+  }
+
+  $disable_modules = array(
+    'devconnect_apigee',
+    'devconnect_readonlymode_ext',
+    'devconnect_api_content_types',
+    'devconnect_api_views',
+    'devconnect_node_settings',
+    'devconnect_readonlymode_ext'
+  );
+
+  if (function_exists('drush_print')) {
+    drush_print('Disabling these modules: ' . join(', ', $disable_modules));
+  }
+
+  module_disable($disable_modules, FALSE);
+  @drupal_uninstall_modules($disable_modules, FALSE);
+
+  variable_del('devconnect_appname_bug');
+
+}

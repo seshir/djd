@@ -1,0 +1,236 @@
+<?php
+/**
+ * @file
+ * Swisscom custom module that allows developers to be grouped by company.
+ *
+ * @author
+ * Chris Novak <cnovak@apigee.com>
+ *
+ * @since 2013-10-Jul
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function swisscom_company_menu() {
+  $items = array();
+  $items['admin/structure/company'] = array(
+    'title' => 'Company',
+    'description' => 'Swisscom companies.',
+    'page callback' => 'swisscom_company_admin_list',
+//    'access arguments' => array('administer company entities'),
+    'access arguments' => array('administer nodes'),
+    'file' => 'swisscom_company.admin.inc',
+  );
+  $items['admin/structure/company/add'] = array(
+    'title' => 'Add company',
+    'page callback' => 'swisscom_company_add',
+    'page arguments' => array('swisscom_company_add_company_form'),
+//    'access arguments' => array('administer company entities'),
+    'access arguments' => array('administer nodes'),
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'swisscom_company.admin.inc',
+  );
+
+//  $company_uri = 'company/%company';
+//  $company_uri_argument_position = 1;
+//
+//  $items[$company_uri] = array(
+//    'title callback' => 'entity_label',
+//    'title arguments' => array('company', $company_uri_argument_position),
+//    'page callback' => 'company_view',
+//    'page arguments' => array($company_uri_argument_position),
+//    'access callback' => 'entity_access',
+//    'access arguments' => array('view', 'company', $company_uri_argument_position),
+//    'file' => 'company.pages.inc',
+//  );
+//
+//  $items[$company_uri . '/view'] = array(
+//    'title' => 'View',
+//    'type' => MENU_DEFAULT_LOCAL_TASK,
+//    'weight' => -10,
+//  );
+//
+//  $items[$company_uri . '/delete'] = array(
+//    'title' => 'Delete task',
+//    'title callback' => 'company_label',
+//    'title arguments' => array($company_uri_argument_position),
+//    'page callback' => 'drupal_get_form',
+//    'page arguments' => array('company_delete_form', $company_uri_argument_position),
+//    'access callback' => 'entity_access',
+//    'access arguments' => array('edit', 'company', $company_uri_argument_position),
+//    'file' => 'company.admin.inc',
+//  );
+//
+//  $items[$company_uri . '/edit'] = array(
+//    'title' => 'Edit',
+//    'page callback' => 'drupal_get_form',
+//    'page arguments' => array('company_form', $company_uri_argument_position),
+//    'access callback' => 'entity_access',
+//    'access arguments' => array('edit', 'company', $company_uri_argument_position),
+//    'file' => 'company.admin.inc',
+//    'type' => MENU_LOCAL_TASK,
+//    'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+//  );
+
+  return $items;
+}
+/**
+ * Implements hook_entity_info().
+ */
+function swisscom_company_entity_info() {
+  $items['swisscom_company'] = array(
+    'label' => t('Company'),
+    'plural label' => t('Companies'),
+    'description' => t('Companies from Apigee managment server.'),
+    'entity class' => 'SwisscomCompanyEntity',
+    'controller class' => 'SwisscomCompanyEntityController',
+    'entity keys' => array(
+      'id' => 'name',
+      'label' => 'displayName',
+    ),
+    'label callback' => 'entity_class_label',
+    'uri callback' => 'entity_class_uri',
+    'module' => 'swisscom_company',
+    'access callback' => 'swisscom_company_access',
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_entity_property_info().
+ */
+function swisscom_company_entity_property_info() {
+  // Properties the Apigee Company API provides.
+  $info['swisscom_company']['properties'] = array(
+    // Name of the company.
+    'name' => array(
+      'label' => t('Name'),
+    ),
+    // Display name of the company.
+    'displayName' => array(
+      'label' => t('Display Name'),
+    ),
+    // Organization containing the company.
+    'organization' => array(
+      'label' => t('Organization'),
+    ),
+    // Status of the company--active or inactive.
+    'status' => array(
+      'label' => t('Status'),
+    ),
+    // UNIX time when the entity was created.
+    'createdAt' => array(
+      'label' => t('createdAt'),
+      'type' => 'date',
+    ),
+    //Apigee account user who created the entity.
+    'createdBy' => array(
+      'label' => t('Create By'),
+    ),
+    //	UNIX time when the entity was last modified.
+    'lastModifiedAt' => array(
+      'label' => t('LastModifiedAt'),
+      'type' => 'date',
+    ),
+    //	Apigee account user who last modified the entity.
+    'lastModifiedBy' => array(
+      'label' => t('lastModifiedBy'),
+    ),
+    // Apps associated with the company.
+    'apps' => array(
+      'label' => t('Apps associated with the company'),
+      'type' => 'url',
+      'getter callback' => 'entity_property_getter_method',
+    ),
+  );
+
+  return $info;
+}
+
+
+/**
+ * Access callback for company.
+ */
+function swisscom_company_access($op, $task, $account = NULL, $entity_type = NULL) {
+  return TRUE; //user_access('administer company types', $account);
+//  global $user;
+//  if (!isset($account)) {
+//    $account = $user;
+//  }
+//  switch ($op) {
+//    case 'create':
+//      return user_access('administer company entities', $account)
+//      || user_access('create company entities', $account);
+//    case 'view':
+//      return user_access('administer company entities', $account)
+//      || user_access('view company entities', $account);
+//    case 'edit':
+//      return user_access('administer company entities')
+//      || user_access('edit any company entities')
+//      || (user_access('edit own company entities') && ($task->uid == $account->uid));
+//  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function company_permission() {
+  $permissions = array(
+    'administer company types' => array(
+      'title' => t('Administer company types'),
+      'description' => t('Allows users to configure company types and their fields.'),
+      'restrict access' => TRUE,
+    ),
+    'create company entities' => array(
+      'title' => t('Create company'),
+      'description' => t('Allows users to create company.'),
+      'restrict access' => TRUE,
+    ),
+    'view company entities' => array(
+      'title' => t('View company'),
+      'description' => t('Allows users to view company.'),
+      'restrict access' => TRUE,
+    ),
+    'edit any company entities' => array(
+      'title' => t('Edit any company'),
+      'description' => t('Allows users to edit any company.'),
+      'restrict access' => TRUE,
+    ),
+    'edit own company entities' => array(
+      'title' => t('Edit own company'),
+      'description' => t('Allows users to edit own company.'),
+      'restrict access' => TRUE,
+    ),
+  );
+  return $permissions;
+}
+
+/**
+ * Return the client.
+ */
+function swisscom_company_client() {
+  // Return the client if it has been loaded already.
+  $client = &drupal_static(__FUNCTION__);
+  if (!isset($client)) {
+    $client = stdClass();
+//    // Initialize the vars for the API call.
+//    $serviceName = Zend_Gdata_Photos::AUTH_SERVICE_NAME;
+//    $user = variable_get('picasa_google_user', '');
+//    $pass = variable_get('picasa_google_pass', '');
+//
+//    // Attempt to create the client.
+//    try {
+//      $client = Zend_Gdata_ClientLogin::getHttpClient($user, $pass, $serviceName);
+//    }
+//    catch (Zend_Gdata_App_HttpException $e) {
+//      watchdog('Picasa', $e->getMessage(), array(), WATCHDOG_ERROR);
+//      if ($e->getResponse() != NULL) {
+//        watchdog('Picasa', $e->getResponse()->getBody(), array(), WATCHDOG_ERROR);
+//      }
+//    }
+//    // Not catched exceptions will be catched by controller, logged to the
+//    // watchdog and re-thrown.
+  }
+  return $client;
+}

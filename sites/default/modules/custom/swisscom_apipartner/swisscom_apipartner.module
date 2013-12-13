@@ -1,0 +1,271 @@
+<?php
+
+/**
+ * @file
+ * API Parnter Management module.
+ */
+
+function swisscom_apipartner_menu() {
+  $items['api/partner/registration'] = array(
+  		'title' => t('Request API Access'),
+  		'page callback' => 'drupal_get_form',
+  		'page arguments' => array('api_partner_registration'),
+  		'access arguments' => array('access content'),
+  );
+  $items['admin/config/swisscom_custom/partner'] = array(
+  		'title' => t('Partner Requests'),
+  		'page callback' => 'drupal_get_form',
+  		'page arguments' => array('api_partner_management'),
+  		'access arguments' => array('access administration pages'),
+  		'file' => 'swisscom_apipartner.admin.inc',
+  		'type' => MENU_LOCAL_TASK,
+  );
+  $items['admin/config/swisscom_custom/partner/settings'] = array(
+  		'title' => t('Partner Settings'),
+  		'page callback' => 'drupal_get_form',
+  		'page arguments' => array('swisscom_apipartner_admin_settings'),
+  		'access arguments' => array('access administration pages'),
+  		'type' => MENU_LOCAL_TASK,
+  		'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+  		'tab_parent' => 'admin/config/swisscom_custom/partner',
+  		'file' => 'swisscom_apipartner.admin.inc',
+  );
+  
+  return $items;
+}
+
+function api_partner_products() {
+	$api_partner_products = array();
+
+	// Create an object of type SelectQuery
+	$query = db_select('node', 'n');
+
+	// Add extra detail to this query object: a condition, fields and a range
+	$query
+	  ->condition('n.type', 'api_partner_product', '=')
+	  ->fields('n', array('nid', 'title'))
+	  ->orderBy('title', 'ASC');
+	  
+	$result = $query->execute();
+	foreach ($result as $record) {
+	  $api_partner_products[$record->nid] = $record->title;
+	}
+	return $api_partner_products;
+}
+
+/* 
+ * API Partner registration form 
+ * returns $form array 
+ */
+function api_partner_registration($form,&$form_state) {
+	global $user;
+	
+	$module_path = drupal_get_path('module', 'swisscom_apipartner');
+	$library_path = libraries_get_path('jquery.selectlist');
+	drupal_add_js($library_path . '/scripts/jquery.selectlist.pack.js');
+	drupal_add_css($library_path . '/css/selectlist.css');
+	drupal_add_css("$module_path/swisscom_apipartner.css");
+	drupal_add_js("$module_path/swisscom_apipartner.js");
+	
+	
+	$api_partner_products = api_partner_products();
+	$arg_node = arg(3);
+	
+	if(isset($arg_node) ) {
+		$obj = node_load($arg_node);
+		if(array_key_exists($obj->nid,$api_partner_products))
+			$default_product = $obj->nid;
+		else
+			$default_product = null;
+	}
+	$form['partner_email'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Your Email Address '),
+		'#default_value' => ($user->mail)? $user->mail: null,
+		'#required' => TRUE,
+	);
+	$form['partner_api_product'] = array(
+		'#type' => 'select',
+		'#title' => t('API Name'),
+		'#options' => $api_partner_products,
+		'#default_value' => $default_product,
+		'#required' => TRUE,
+		'#multiple' => TRUE,
+		'#id' => 'api_partner_product',
+	);
+	$form['partner_usage_plan'] = array(
+		'#type' => 'textarea',
+		'#title' => t('What are you planning to do with the API? '),
+		'#description' => t('Letting us know what you plan to do with the API will help us understand you needs more effectively.'),
+	);
+	
+	$form['submit'] = array(
+		'#type' => 'submit',
+		'#value' => 'Submit',
+	);
+ 
+	return $form;
+}
+
+/* 
+ * Submit handler for API Partner registration form 
+ * Sends API Request details to Partner Administrator
+ */
+function api_partner_registration_submit($form,&$form_state) {
+	global $user;
+	
+	// make an entry to swisscom_partner_registrations table
+	$par_id = db_insert('swisscom_partner_registration')
+	  ->fields(array('partner_email','partner_api_product','partner_usage_plan','uid', 'submitted'))
+	  ->values(array(
+		'partner_email' => $form_state['values']['partner_email'],
+		'partner_api_product' => serialize($form_state['values']['partner_api_product']),
+		'partner_usage_plan' => $form_state['values']['partner_usage_plan'],
+		'uid' => $user->uid,
+		'submitted' => REQUEST_TIME,
+	  ))
+	  ->execute();
+	
+	// format selected APIs
+	$apis = "<ul>";
+	foreach( $form_state['values']['partner_api_product']  as $partner_product ) {
+		$prod = node_load($partner_product); 
+		$apis .= '<li>'.$prod->title.'</li>';
+	}
+	$apis .= "</ul>";
+	
+	if(!$par_id) {
+		drupal_set_message(t('We encountered a problem while making your Request. Please try agin.'),'error');
+	} else {
+		$partner_api = new stdClass();
+		$partner_api->partner_email = $form_state['values']['partner_email'];
+		$partner_api->partner_apis = $apis;
+		$partner_api->partner_usage_plan = $form_state['values']['partner_usage_plan'];
+						
+		$pet = pet_load('partner_api_request');
+		$params = _pet_mail_params($pet);
+		$params['partner_api'] = $partner_api;
+		
+		$emails = _partner_admin_notify_get_receiver_mails();
+		if (empty($emails)) {
+		  return;
+		}
+		$to = implode(', ', $emails);
+		
+		$params['pet_to'] = $to;
+		pet_send_one_mail($pet, $params);
+		drupal_set_message(t('<p>Thanks for contacting us. We will respond to you as soon as possible.</p>'),'status');
+	}
+}
+
+/**
+ * Commonly used params for mail
+ *
+ */
+function _pet_mail_params($pet) {    	
+  $params['pet_from'] = ($pet->pet_from) ? $pet->pet_from : variable_get('site_mail', ini_get('sendmail_from'));
+  
+  $params['MIME-Version'] = '1.0';
+  $params['Content-Type'] = ' text/html; charset=utf-8; format=flowed';
+  $params['Content-Transfer-Encoding'] = 'quoted-printable';
+  $params['X-Mailer'] = 'Drupal';
+
+  return $params;
+}
+
+/**
+ * Implements hook_pet_substitutions_alter
+ * Alters the substitutions 
+ */
+function swisscom_apipartner_pet_substitutions_alter(&$substitutions, $params) {
+	$substitutions['partner_api'] = $params['partner_api'];
+}
+ 
+/**
+ * Generate token for API request details of partner
+ * Implementation fo hook_tokens($type, $tokens, array $data = array(), array $options = array())
+ *
+ */
+function  swisscom_apipartner_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $url_options = array('absolute' => TRUE);
+  if (isset($options['language'])) {
+    $url_options['language'] = $options['language'];
+    $language_code = $options['language']->language;
+  }
+  else {
+    $language_code = NULL;
+  }
+  $sanitize = !empty($options['sanitize']);
+
+  $replacements = array();
+  if ($type == 'partner_api' && !empty($data['partner_api'])) {
+    $partner_api = $data['partner_api'];
+
+    foreach ($tokens as $name => $original) {
+      switch ($name) {
+        // Simple key values on the node.
+        case 'partner_email':
+        	$replacements[$original] = $partner_api->partner_email;	
+        	break;	
+        case 'partner_apis': 
+        	$replacements[$original] = $partner_api->partner_apis;	
+        	break;
+        case 'partner_usage_plan': 
+        	$replacements[$original] = $partner_api->partner_usage_plan;
+        	break;
+       }
+    }
+   }  
+   
+   return $replacements;    	        	
+}
+
+/**
+ * Implements hook_mail_alter()
+ * @param string $message
+ */
+function swisscom_apipartner_mail_alter(&$message) {
+    $headers = array(
+        'MIME-Version' => '1.0',
+        'Content-Type' => 'text/html; charset=iso-8859-1; format=flowed',
+        'Content-Transfer-Encoding' => '8Bit',
+        'X-Mailer' => 'Drupal',
+    );
+    foreach ($headers as $key => $value) {
+        $message['headers'][$key] = $value;
+    }
+}
+
+/**
+ * Generates the receiver mail addresses.
+ * @return array
+ */
+function _partner_admin_notify_get_receiver_mails() {
+  $notify_type = variable_get('partner_admin_notify_type', 'Custom');
+  $emails = array();
+  $valid_emails = array();
+  switch ($notify_type) {
+    case 'Custom':
+      $emails = explode(',', variable_get('partner_admin_notify_mailto', variable_get('site_mail', ini_get('sendmail_from'))));
+      break;
+    case 'Both':
+      $emails = explode(',', variable_get('partner_admin_notify_mailto', variable_get('site_mail', ini_get('sendmail_from'))));
+    // There is no break here for a reason.
+    case 'Role':
+      $roles = implode(',', variable_get('partner_admin_notify_roles', array()));
+      if (!empty($roles)) {
+        $result = db_query("SELECT mail FROM {users} AS u INNER JOIN {users_roles} AS r ON u.uid = r.uid WHERE r.rid IN(:role) and u.status = '1' ", array(':role' => $roles));
+        while ($mail = $result->fetchObject()) {
+          $emails[] = $mail->mail;
+        }
+      }
+      break;
+  }
+  $emails = array_unique($emails);
+  foreach ($emails as $email) {
+    if (valid_email_address($email)) {
+      $valid_emails[] = $email;
+    }
+  }
+  return $valid_emails;
+}

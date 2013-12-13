@@ -1,0 +1,52 @@
+<?php
+
+
+/**
+* Add allowed values funtion for API Roles field
+*/
+function api_management_update_7000() {
+  $field_name = 'api_roles';
+  $entity_type = 'node';
+  $bundle = 'api_product';
+  $label = 'API Roles';
+  $weight = 0;
+  $allowed_values_function = '_api_management_get_api_roles';
+
+ // Look for or add the specified status field to the requested entity bundle.
+ $field = field_info_field($field_name);
+ $instance = field_info_instance($entity_type, $field_name, $bundle);
+
+ if (empty($field)) {
+   $field = array(
+     'field_name' => $field_name,
+     'type' => 'list_text',
+     'cardinality' => 1,
+     'entity_types' => array($entity_type),
+     'translatable' => FALSE,
+     'locked' => FALSE,
+     'settings' => array(
+       'allowed_values_function' => $allowed_values_function,
+     ),
+   );
+   $field = field_create_field($field);
+ }
+
+ if (empty($instance)) {
+   $instance = array(
+     'field_name' => $field_name,
+     'entity_type' => $entity_type,
+     'bundle' => $bundle,
+     'label' => $label,
+     'required' => TRUE,
+     'settings' => array(),
+     'widget' => array(
+       'type' => 'options_select',
+       'weight' => $weight,
+     ),
+
+     'display' => array(),
+   );
+
+   field_create_instance($instance);
+ }
+}

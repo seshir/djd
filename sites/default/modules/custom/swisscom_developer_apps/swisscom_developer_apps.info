@@ -1,0 +1,8 @@
+name = Swisscom Developer Apps
+description = "Custom overrides for devconnect developer apps module."
+package = "Swisscom"
+core = "7.x"
+version = "7.x-1.3"
+
+dependencies[] = "devconnect_developer_apps"
+dependencies[] = "rules"

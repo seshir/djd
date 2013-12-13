@@ -1,0 +1,33 @@
+name = Swisscom Custom Theme
+description = Swisscom Custom Theme
+core = 7.x
+version = "7.x-1.2"
+base theme = apigee_devconnect
+
+regions[header]         = 'Top Bar'
+regions[homepage_header]= 'Homepage Header'
+regions[highlighted]    = 'Highlighted'
+regions[help]           = 'Help'
+regions[content]        = 'Content'
+regions[sidebar_first]  = 'Primary'
+regions[sidebar_second] = 'Secondary'
+regions[footer]         = 'Footer'
+
+stylesheets[all][] = css/swisscom.css
+stylesheets[all][] = css/swisscom-views.css
+
+scripts[all] = js/logo-rotate.js
+
+plugins[advanced_forum][styles] = 'advanced_forum_swisscom'
+
+settings[header_bg_color] = #1F5A9D
+settings[header_txt_color] = #FFFFFF
+settings[header_hover_bg_color] = #1F5A9D
+settings[header_hover_txt_color] = #FFFFFF
+settings[link_color] = #18589D
+settings[link_hover_color] = #0B4965
+settings[footer_bg_color] = #F5F5F5
+settings[footer_link_color] = #18589D
+settings[footer_link_hover_color] = #1D7CA7
+settings[button_background_color] = #0B387F
+settings[button_text_color] = #FFFFFF

@@ -1,0 +1,154 @@
+<?php
+/**
+ * @file
+ * Install, update and uninstall functions for the module.
+ */
+
+/**
+ * Implementation of hook_install().
+ */
+function swisscom_custom_install() {
+//  // set site names
+//  variable_set('site_name', 'VDMS Developer Portal');
+//  variable_set('smtp_fromname', 'VDMS Developer Portal');
+
+  theme_enable(array('swisscom', 'seven'));
+  variable_set('theme_default', 'swisscom');
+  variable_set('admin_theme', 'seven');
+  // Use the administration theme when editing or creating content
+  variable_set('node_admin_theme', 0);
+
+
+  // set time zone and country
+  variable_set('site_default_country', 'CH');
+  // system timezone
+  variable_set('date_default_timezone', 'Europe/Berlin');
+  // set first day of week: 0=Sunday, 1=Monday
+  variable_set('date_first_day', 1);
+  // user can set their timezone
+  variable_set('configurable_timezones', 1);
+  // Users are not told if the timezone is not set
+  variable_set('empty_timezone_message', 0);
+  // User can configure their timezone
+  variable_set('configurable_timezones', 1);
+  // Timezone for new users is default timezone
+  variable_set('user_default_timezone', 0);
+
+  // set theme to custom theme
+  theme_disable(array('apigee_base', 'apigee_devconnect', 'tao'));
+
+//  // Disable Forums and Blogs
+//  $modules = array('forum','blog');
+//  module_disable($modules,TRUE);
+//  drupal_uninstall_modules($modules);
+
+  $modules = array(
+    'oauthconnector',
+    'connector_action_default_register_form',
+    'devel_generate',
+    'location_generate',
+    'devel_node_access',
+    'feeds',
+    'feeds_ui',
+    'feeds_import',
+    'feeds_tamper',
+    'feeds_tamper_ui',
+    'cck_phone',
+    'oauth_common',
+    'oauth_common_providerui',
+    'oauth2_common',
+    'og',
+    'gravatar',
+    'job_scheduler',
+    'multiblock',
+    'readonlymode',
+    'qpcache',
+    'querypath',
+    'services',
+    'services_views',
+    'media',
+    'media_internet',
+    'media_youtube',
+    'rules',
+    'apachesolr_access',
+    'apachesolr',
+    'apachesolr_search',
+    'facetapi',
+    'http_client',
+    'googleanalytics',
+
+);
+
+module_disable($modules,TRUE);
+drupal_uninstall_modules($modules);
+
+}
+
+/**
+ * Turn off Google SSO on login page
+ */
+function swisscom_custom_update_7001(&$sandbox) {
+  $modules = array(
+    'apigee_sso',
+    'oauthconnector',
+    'oauth_common',
+    'oauth_common_providerui',
+    'oauth2_common',
+    'devconnect_oauth_client',
+    'services_oauth',
+    'http_client_oauth',
+  );
+
+  module_disable($modules,TRUE);
+  drupal_uninstall_modules($modules);
+}
+
+/**
+ * Add allowed values function for API Roles field
+ */
+function api_management_update_7002() {
+  $field_name = 'api_roles';
+  $entity_type = 'node';
+  $bundle = 'api_product';
+  $label = 'API Roles';
+  $weight = 0;
+  $allowed_values_function = 'swisscom_custom_get_api_products';
+
+  // Look for or add the specified status field to the requested entity bundle.
+  $field = field_info_field($field_name);
+  $instance = field_info_instance($entity_type, $field_name, $bundle);
+
+  if (empty($field)) {
+    $field = array(
+      'field_name' => $field_name,
+      'type' => 'list_text',
+      'cardinality' => 1,
+      'entity_types' => array($entity_type),
+      'translatable' => FALSE,
+      'locked' => FALSE,
+      'settings' => array(
+        'allowed_values_function' => $allowed_values_function,
+      ),
+    );
+    $field = field_create_field($field);
+  }
+
+  if (empty($instance)) {
+    $instance = array(
+      'field_name' => $field_name,
+      'entity_type' => $entity_type,
+      'bundle' => $bundle,
+      'label' => $label,
+      'required' => TRUE,
+      'settings' => array(),
+      'widget' => array(
+        'type' => 'options_select',
+        'weight' => $weight,
+      ),
+
+      'display' => array(),
+    );
+
+    field_create_instance($instance);
+  }
+}

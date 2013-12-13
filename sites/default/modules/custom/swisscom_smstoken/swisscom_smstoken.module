@@ -1,0 +1,324 @@
+<?php
+/**
+ * @file
+ * Authenticate users via SMS.
+ *
+ * @author
+ * Cesar Galindo <CGalindo@apigee.com>
+ * Seshi Reddy <seshireddy@apigee.com>
+ * Chris Novak <cnovak@apigee.com>
+ *
+ * @since 2013-26-August
+ */
+
+/**
+ * Implements hook_menu()
+ */
+function swisscom_smstoken_menu() {
+  $items = array();
+  $items['admin/config/swisscom_smstoken'] = array(
+    'title' => 'Swisscom SMS Token',
+    'description' => 'SMS Token settings.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('swisscom_smstoken_admin_settings'),
+    'access arguments' => array('access administration pages'),
+    'file' => 'swisscom_smstoken.admin.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  $items['user/verify'] = array(
+    'title' => t('Verify your account'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('swisscom_smstoken_verify_form', 1),
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'swisscom_smstoken.pages.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function swisscom_smstoken_menu_alter(&$items) {
+//  // Calls new function user_pass_reset2() in user.pages2.inc.
+//  // This function is derived from user_pass_reset() function in user.pages.inc --> core drupal user module.
+//  $items['user/reset/%/%/%']['page arguments'] = array('user_pass_reset2', 2, 3, 4);
+//  $items['user/reset/%/%/%']['file'] = 'user.pages2.inc';
+//  $items['user/reset/%/%/%']['file path'] = drupal_get_path('module', 'swisscom_smstoken');
+
+  $items['user/%user/apps']['page callback'] = 'swisscom_smstoken_developer_apps_getlist';
+  $items['user/%user/apps/add']['page arguments'] = array('swisscom_smstoken_developer_apps_edit_form', 1);
+  $items['user/%user/apps/%/edit-app']['page arguments'] = array('swisscom_smstoken_developer_apps_edit_form', 1, 3);
+}
+
+function swisscom_smstoken_developer_apps_getlist($user) {
+    // Make sure the user object is fully loaded.
+    $user = user_load($user->uid);
+    // Get the value of the SMS token field.
+    $field_sms_token_verified = field_get_items('user', $user, 'field_sms_token_verified');
+    // If the sms_token_verified is not set or set to "no", show SMS verification page.
+    if (!$field_sms_token_verified || $field_sms_token_verified[0]['value'] != 1) {
+      drupal_goto('user/verify');
+    }
+    else {
+      return swisscom_developer_apps_getlist($user);
+    }
+}
+
+function swisscom_smstoken_developer_apps_edit_form($form, &$form_state, $account, $app_name = NULL) {
+  // Make sure the user object is fully loaded.
+  $account = user_load($account->uid);
+  // Get the value of the SMS token field.
+  $field_sms_token_verified = field_get_items('user', $account, 'field_sms_token_verified');
+  // If the sms_token_verified is not set or set to "no", show SMS verification page.
+  if (!$field_sms_token_verified || $field_sms_token_verified[0]['value'] != 1) {
+    drupal_goto('user/verify');
+  }
+  else {
+    return swisscom_developer_apps_edit_form($form, $form_state, $account, $app_name);
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function swisscom_smstoken_form_user_profile_form_alter(&$form, &$form_state, $form_id) {
+
+  // Make sure the SMS Token verified  field is hidden for people whom do not have permission.
+  if (!user_access('administer sms token verified')) {
+    unset($form['field_sms_token_verified']);
+  }
+
+}
+
+
+/**
+ * Helper handler to reset SMS verification when mobile number has changed
+ *
+ * @param array $form
+ * @param array $form_state
+ */
+function swisscom_smstoken_profile_form_smstoken_reset_validate(&$form, &$form_state) {
+
+  // Trim any zeros from beginner of number
+  if ($form_state['input']['field_mobile_number'][LANGUAGE_NONE][0]['number']) {
+    $form_state['input']['field_mobile_number'][LANGUAGE_NONE][0]['number'] = ltrim($form_state['input']['field_mobile_number'][LANGUAGE_NONE][0]['number'], '0');
+  }
+  
+  if ($form['#user']->field_mobile_number[LANGUAGE_NONE][0]['number'] != $form_state['input']['field_mobile_number'][LANGUAGE_NONE][0]['number']) {
+    $form_state['values']['field_sms_token_verified'][LANGUAGE_NONE][0]['value'] = 0;
+    $form['input']['field_sms_token_verified'] = $form_state['values']['field_sms_token_verified'];
+
+    module_load_include('php', 'swisscom_smstoken', 'SwisscomSmsToken');
+    $client = swisscom_smstoken_smstoken_client();
+    $dc = new SwisscomSmsToken($client);
+
+    require_once drupal_get_path('module', 'cck_phone') . '/cck_phone_countrycodes.inc';
+    $country_codes = cck_phone_countrycodes($form_state['input']['field_mobile_number'][LANGUAGE_NONE][0]['country_codes']);
+    $mobile_number = $country_codes['code'] . $form_state['input']['field_mobile_number'][LANGUAGE_NONE][0]['number'];
+
+    if (!empty($mobile_number)) {
+      try {
+        $list = $dc->smsToken($mobile_number);
+        if($list['sendSmsTokenResponse']['state'] != 'OK') { 
+        	throw new Exception(t("Unable to generate PIN for %mobile_number."));
+        }
+        drupal_set_message(t("A new SMS pin has been sent to your mobile number " . check_plain($mobile_number)));
+      }
+      catch (Exception $e) {
+        watchdog('swisscom_smstoken', $e->getMessage(),array('%mobile_number'=>$mobile_number), WATCHDOG_INFO);
+        drupal_set_message(t('Unable to generate a new SMS pin at the moment. Please try again later.'), 'error');
+      }
+    }
+    else {
+      drupal_set_message(t('Mobile phone number is required,'), 'error');
+    }
+  }
+}
+
+
+
+
+/**
+* Returns the APIClient singleton for this instance's org/endpoint pair.
+*
+* @return Apigee\Util\APIClient
+*/
+function swisscom_smstoken_smstoken_client() {
+  $org = variable_get('devconnect_org', DEVCONNECT_APIGEE_DEFAULT_ORG);
+  $endpoint = variable_get('swisscom_smstoken_endpoint', FALSE);
+
+  // Username and Password is not required
+  //$curl_auth = devconnect_get_endpoint_auth();
+  //list($username, $password) = explode(':', $curl_auth, 2);
+
+  $client = Apigee\Util\APIClient::getInstance($endpoint, $org, $username = Null, $password = NUll);
+  $client->setAttribute('double_url_encode', FALSE);
+  return $client;
+}
+
+/*
+ * Ensure user has verfied SMS and if not, send them to the sms verify page when logging in.
+ */
+function swisscom_smstoken_user_login(&$edit, $account) {
+  global $user;
+//
+//  // Make sure the user object is fully loaded.
+//  $user = user_load($user->uid);
+//  // Get the value of the SMS token field.
+//  $field_sms_token_verified = field_get_items('user', $user, 'field_sms_token_verified');
+//  // If the sms_token_verified is not set or set to "no", show SMS verification page.
+//  if (!$field_sms_token_verified || $field_sms_token_verified[0]['value'] != 1) {
+//    // Send SMS Token to user's mobile number for the first time...
+////    $field_mobile_number = field_get_items('user', $user, 'field_mobile_number');
+////    if (isset($field_mobile_number)) {
+////      swisscom_smstoken_send_sms_validation_code($user, $field_mobile_number[0]['country_codes'],$field_mobile_number[0]['number']);
+////    }
+//    drupal_goto('user/verify');
+//  }
+
+//  // Important - Remove login role on Login Destination module.  It overrides this code.
+//  // Your logic will set $redirection to the desired location
+//  if (!($account->field_sms_token_verified[LANGUAGE_NONE][0]['value'] == 1) && !in_array('Drupal Administrator', array_values($account->roles))) {
+//    $redirection = 'user/'.$account->uid.'/edit';
+//    $_GET['destination'] = $redirection;
+//    $edit['redirect'] = $redirection;
+//
+//    // Send SMS Token to user's mobile number for the first time...
+//    if (isset($account->field_mobile_number[LANGUAGE_NONE][0]['number'])) {
+//      $temp_state['input']['field_mobile_number'][LANGUAGE_NONE][0]['country_codes'] = $account->field_mobile_number[LANGUAGE_NONE][0]['country_codes'];
+//      $temp_state['input']['field_mobile_number'][LANGUAGE_NONE][0]['number'] = $account->field_mobile_number[LANGUAGE_NONE][0]['number'];
+//      $temp_state['clicked_button']['#value'] = 'SEND SMS TOKEN VERIFICATION';
+//      swisscom_smstoken_profile_form_validate($form, &$temp_state);
+//    }
+//  }
+//  else {
+//    $_GET['destination'] = '<front>';
+//  }
+}
+
+
+/**
+ * Implementation of hook_user_load
+ */
+function swisscom_smstoken_user_load($users) {
+  global $user;
+
+//  if($user->uid > 0 ) {
+//	  $client = devconnect_default_api_client();
+//
+//    try {
+//      $dev = new Apigee\ManagementAPI\Developer($client);
+//      $dev->load($user->mail);
+//    }
+//    catch (Exception $e) {
+//      return FALSE;
+//    }
+//    $mobile_number_from_server = NULL;
+//    $mobile_number_from_server = $dev->getAttribute('mobilenr');
+//
+//    $result = db_query('SELECT uid FROM {users} WHERE uid IN (:uids)', array(':uids' => array_keys($users)));
+//    foreach ($result as $record) {
+//      $users[$record->uid]->attribute_mobilenr = $mobile_number_from_server;
+//    }
+//  }
+}
+
+/**
+ * Implementation of form validation
+ */ 
+function _swisscom_smstoken_update_admin_attributes($form,&$form_state) {
+    /**
+     * Allow Drupal Administrator role to update developer attribute without verification
+     * Trim any zeros from beginner of number 
+     */
+	require_once drupal_get_path('module', 'cck_phone') . '/cck_phone_countrycodes.inc';
+	$country_codes = cck_phone_countrycodes($form_state['values']['field_mobile_number'][LANGUAGE_NONE][0]['country_codes']);
+	$mobile_number = $country_codes['code'] . ltrim($form_state['values']['field_mobile_number'][LANGUAGE_NONE][0]['number'], '0');
+	
+	//Update mobilenr attribute with the latest number
+	$form_state['values']['attribute_mobilenr'] = ltrim($mobile_number,'+');
+}
+
+/**
+ * Implementation of hook_perm().
+ */
+function swisscom_smstoken_permission() {
+  return array(
+    'bypass mobile phone validation' => array(
+      'title' => t('Bypass mobile phone validation'),
+      'description' => t('Allow skipping of the mobile phone validation.'),
+      'restrict access' => TRUE,
+    ),
+    'administer sms token verified' => array(
+      'title' => t('Administer SMS token validation'),
+      'description' => t('Ability to edit <strong>SMS Token Verified</strong> field.'),
+      'restrict access' => TRUE,
+    ),
+  );
+}
+
+/**
+ * Implements hook_user_presave().
+ */
+function swisscom_smstoken_user_presave(&$edit, $account, $category) {
+  // Get the mobile number from the account and see if the user is changing it.
+  if(isset($edit['field_mobile_number'][LANGUAGE_NONE][0]) && !isset($edit['field_sms_token_verified'][LANGUAGE_NONE][0])) {
+    if($edit['field_mobile_number'][LANGUAGE_NONE][0]['number'] != $account->field_mobile_number[LANGUAGE_NONE][0]['number']) {
+      // Mobile number has changed, the number needs to be revalidated.
+      $edit['field_sms_token_verified'][LANGUAGE_NONE][0]['value'] = 0;
+    }
+    // If country code changes, the number needs to be revalidated.
+    if($edit['field_mobile_number'][LANGUAGE_NONE][0]['country_codes'] != $account->field_mobile_number[LANGUAGE_NONE][0]['country_codes']) {
+      $edit['field_sms_token_verified'][LANGUAGE_NONE][0]['value'] = 0;
+    }
+  }
+
+  // Since the devconnect_user will remove all attributes, make sure to add
+  // the mobile number to the management server if the number is validated.
+
+
+}
+
+///**
+// * Implements hook_user_update().
+// */
+//function swisscom_smstoken_user_update(&$edit, $account, $category) {
+//  // Update management server if the mobile number is validated.
+//  if(isset($edit['field_sms_token_verified'][LANGUAGE_NONE][0]) && $edit['field_sms_token_verified'][LANGUAGE_NONE][0] == 1) {
+//    $phone_country = cck_phone_countrycodes($country_code);
+//    $phone_full = $phone_country['code'] . $mobile_number;
+//    swisscom_smstoken_sync_mobile($account, $phone_full);
+//  }
+//}
+
+/**
+ * Sync user's mobile phone number up to management server.
+ * @param $account
+ * @param $phone_mobile
+ *
+ * @return boolean if the call succeeded.
+ */
+function swisscom_smstoken_sync_mobile($account, $phone_mobile) {
+// Sync mobile number with Apigee management server.
+  $client = devconnect_default_api_client();
+  $dev = new Apigee\ManagementAPI\Developer($client);
+  if (!$dev->validate($account->mail)) {
+    watchdog('Error finding %user in management server.', array('%user' => $account->mail), WATCHDOG_ALERT);
+    return FALSE;
+  }
+  $dev->load($account->mail);
+  $dev->setAttribute('mobilenr', check_plain($phone_mobile));
+  try {
+    $dev->save();
+  } catch (Exception $e) {
+    watchdog('Error updating mobile number %number for %user in management server.', array(
+      '%number' => check_plain($phone_mobile),
+      '%user' => $account->mail
+    ), WATCHDOG_ALERT);
+    return FALSE;
+  }
+  return TRUE;
+}

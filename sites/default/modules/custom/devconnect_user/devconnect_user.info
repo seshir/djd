@@ -1,0 +1,17 @@
+name = DevConnect User
+description = Modified devconnect_user_user_presave() so that managment server attribs are not lost.
+core = 7.x
+package = Swisscom
+php = 5.2.4
+version = 7.x-4.0-swisscom-patched
+project = devconnect
+dependencies[] = cck_phone
+dependencies[] = devconnect
+dependencies[] = features
+dependencies[] = link
+dependencies[] = list
+dependencies[] = options
+datestamp = 1342015551
+features[features_api][] = api:1
+features[field][] = user-user-field_first_name
+features[field][] = user-user-field_last_name
